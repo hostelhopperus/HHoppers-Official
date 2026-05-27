@@ -7,7 +7,7 @@ loadEnv();
 
 const PORT = Number(process.env.PORT || 4173);
 const ROOT = __dirname;
-const DATA_DIR = path.join(ROOT, "data");
+const DATA_DIR = process.env.DATA_DIR || (process.env.VERCEL ? path.join("/tmp", "hoppers-data") : path.join(ROOT, "data"));
 const SUBMISSIONS_FILE = path.join(DATA_DIR, "submissions.json");
 const EMAIL_OUTBOX_FILE = path.join(DATA_DIR, "email-outbox.json");
 const ACCOUNTS_FILE = path.join(DATA_DIR, "accounts.json");
@@ -102,9 +102,37 @@ function parseCookies(req) {
   );
 }
 
+function sessionSecret() {
+  return process.env.SESSION_SECRET || process.env.ADMIN_CODE || ADMIN_CODE;
+}
+
+function signValue(value) {
+  return crypto.createHmac("sha256", sessionSecret()).update(value).digest("base64url");
+}
+
+function createSignedToken(payload) {
+  const body = Buffer.from(JSON.stringify({ ...payload, issuedAt: Date.now() })).toString("base64url");
+  return `${body}.${signValue(body)}`;
+}
+
+function readSignedToken(token) {
+  if (!token || !token.includes(".")) return null;
+  const [body, signature] = token.split(".");
+  const expected = signValue(body);
+  const actualBuffer = Buffer.from(signature);
+  const expectedBuffer = Buffer.from(expected);
+  if (actualBuffer.length !== expectedBuffer.length || !crypto.timingSafeEqual(actualBuffer, expectedBuffer)) return null;
+  try {
+    return JSON.parse(Buffer.from(body, "base64url").toString("utf8"));
+  } catch {
+    return null;
+  }
+}
+
 function isAdmin(req) {
   const token = parseCookies(req)[SESSION_COOKIE];
-  return Boolean(token && sessions.has(token));
+  const signed = readSignedToken(token);
+  return Boolean((signed && signed.purpose === "admin") || (token && sessions.has(token)));
 }
 
 function clientIp(req) {
@@ -558,7 +586,8 @@ async function accountPayload(account) {
 
 async function accountFromRequest(req) {
   const token = parseCookies(req)[ACCOUNT_COOKIE];
-  const accountId = token ? accountSessions.get(token) : null;
+  const signed = readSignedToken(token);
+  const accountId = signed?.purpose === "account" ? signed.accountId : token ? accountSessions.get(token) : null;
   return accountId ? findAccountById(accountId) : null;
 }
 
@@ -842,7 +871,7 @@ async function handleApi(req, res, pathname) {
       profile,
       billing: buildAccountBilling(type, profile.plan || defaultAccountPlan(type)),
     });
-    const token = crypto.randomBytes(32).toString("hex");
+    const token = createSignedToken({ purpose: "account", accountId: account.id });
     accountSessions.set(token, account.id);
     json(
       res,
@@ -866,7 +895,7 @@ async function handleApi(req, res, pathname) {
       json(res, 401, { error: "Email or password did not match." });
       return true;
     }
-    const token = crypto.randomBytes(32).toString("hex");
+    const token = createSignedToken({ purpose: "account", accountId: account.id });
     accountSessions.set(token, account.id);
     json(
       res,
@@ -923,7 +952,7 @@ async function handleApi(req, res, pathname) {
       json(res, 401, { error: "Invalid admin code" });
       return true;
     }
-    const token = crypto.randomBytes(32).toString("hex");
+    const token = createSignedToken({ purpose: "admin" });
     sessions.add(token);
     json(
       res,
@@ -1183,8 +1212,11 @@ async function serveStatic(req, res, pathname) {
   }
 }
 
-const server = http.createServer(async (req, res) => {
+const ready = ensureDataFiles();
+
+async function handleRequest(req, res) {
   try {
+    await ready;
     const url = new URL(req.url, `http://${req.headers.host}`);
     if (url.pathname.startsWith("/api/")) {
       const handled = await handleApi(req, res, url.pathname);
@@ -1196,13 +1228,19 @@ const server = http.createServer(async (req, res) => {
     console.error(error);
     json(res, 500, { error: "Server error" });
   }
-});
+}
 
-ensureDataFiles().then(() => {
-  server.listen(PORT, () => {
-    console.log(`Hoppers running at http://127.0.0.1:${PORT}`);
-    console.log(`Storage: ${useSupabase() ? "Supabase" : "local JSON"}`);
-    console.log(`Payments: ${process.env.STRIPE_SECRET_KEY ? "Stripe" : "local demo"}`);
-    console.log(`Email: ${process.env.RESEND_API_KEY ? "Resend" : "local outbox"}`);
+const server = http.createServer(handleRequest);
+
+if (require.main === module) {
+  ready.then(() => {
+    server.listen(PORT, () => {
+      console.log(`Hoppers running at http://127.0.0.1:${PORT}`);
+      console.log(`Storage: ${useSupabase() ? "Supabase" : "local JSON"}`);
+      console.log(`Payments: ${process.env.STRIPE_SECRET_KEY ? "Stripe" : "local demo"}`);
+      console.log(`Email: ${process.env.RESEND_API_KEY ? "Resend" : "local outbox"}`);
+    });
   });
-});
+} else {
+  module.exports = handleRequest;
+}
