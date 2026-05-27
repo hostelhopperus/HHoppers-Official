@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2f261c" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Hoppers" />
+    <title>Hoppers Account</title>
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="apple-touch-icon" href="./assets/icon.svg" />
+    <link rel="stylesheet" href="./styles.css?v=29" />
+  </head>
+  <body class="account-page">
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Hoppers home">
+        <span class="brand-mark" aria-hidden="true">H</span>
+        <span>
+          <strong>Hoppers</strong>
+          <small>Account dashboard</small>
+        </span>
+      </a>
+      <a class="header-signin" href="./sign-in.html">Sign in</a>
+      <details class="menu-dropdown">
+        <summary aria-label="Open site menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </summary>
+        <nav class="dropdown-nav" aria-label="Site menu">
+          <a href="./how-it-works.html">How it works</a>
+          <a href="./workers.html">For workers</a>
+          <a href="./hostels.html">For hostels</a>
+          <a href="./find-hostels.html">Find hostels</a>
+        </nav>
+      </details>
+    </header>
+
+    <main>
+      <section id="account-auth" class="account-auth">
+        <div class="account-auth-copy">
+          <p class="eyebrow">Account</p>
+          <h1>Manage your Hoppers profile.</h1>
+          <p>
+            Workers and hostels can log in to update profile details, see application status, review plan info, and keep
+            account settings in one place.
+          </p>
+        </div>
+
+        <div class="auth-card">
+          <div class="segmented account-auth-tabs" aria-label="Account form tabs">
+            <button class="active" type="button" data-auth-tab="login">Log in</button>
+            <button type="button" data-auth-tab="register">Create account</button>
+          </div>
+
+          <form id="login-form" class="account-form">
+            <h2>Log in</h2>
+            <label>
+              <span>Email</span>
+              <input name="email" required type="email" autocomplete="email" placeholder="you@example.com" />
+            </label>
+            <label>
+              <span>Password</span>
+              <input name="password" required type="password" autocomplete="current-password" placeholder="Your password" />
+            </label>
+            <button class="button button-dark" type="submit">Open account</button>
+          </form>
+
+          <form id="register-form" class="account-form" hidden>
+            <h2>Create account</h2>
+            <div class="field-grid">
+              <label>
+                <span>Account type</span>
+                <select name="type">
+                  <option value="worker">Worker</option>
+                  <option value="hostel">Hostel</option>
+                </select>
+              </label>
+              <label>
+                <span>Profile name</span>
+                <input name="name" required placeholder="Full name or hostel name" />
+              </label>
+              <label>
+                <span>Email</span>
+                <input name="email" required type="email" autocomplete="email" placeholder="you@example.com" />
+              </label>
+              <label>
+                <span>Password</span>
+                <input name="password" required minlength="8" type="password" autocomplete="new-password" placeholder="8+ characters" />
+              </label>
+              <label>
+                <span>Location</span>
+                <input name="location" placeholder="City / country" />
+              </label>
+              <label>
+                <span>Profile photo</span>
+                <input name="photo" accept="image/*" type="file" />
+              </label>
+              <label class="worker-nationality-field">
+                <span>Nationality</span>
+                <select name="nationality" data-nationality-select></select>
+              </label>
+              <label class="hostel-website-field" hidden>
+                <span>Website</span>
+                <input name="website" placeholder="https://yourhostel.com" />
+              </label>
+              <div class="hostel-photo-field form-upload-field" hidden>
+                <span>Hostel photos</span>
+                <input id="register-hostel-photos" class="hostel-photo-input sr-only" name="photos" accept="image/*" type="file" multiple />
+                <label class="button button-light photo-picker-button" for="register-hostel-photos">Choose up to 10 photos</label>
+                <small>Images only, under 900 KB each.</small>
+              </div>
+              <fieldset class="field-group">
+                <legend>Skills / roles</legend>
+                <div class="checkbox-grid">
+                  <label class="checkbox-pill"><input name="tags" type="checkbox" value="Reception" />Reception</label>
+                  <label class="checkbox-pill"><input name="tags" type="checkbox" value="Housekeeping" />Housekeeping</label>
+                  <label class="checkbox-pill"><input name="tags" type="checkbox" value="Bar / cafe" />Bar / cafe</label>
+                  <label class="checkbox-pill"><input name="tags" type="checkbox" value="Events" />Events</label>
+                  <label class="checkbox-pill"><input name="tags" type="checkbox" value="Social media" />Social media</label>
+                  <label class="checkbox-pill"><input name="tags" type="checkbox" value="Maintenance" />Maintenance</label>
+                </div>
+              </fieldset>
+              <label class="date-field">
+                <span>Start date</span>
+                <input name="startDate" type="date" />
+              </label>
+              <label class="date-field">
+                <span>End date</span>
+                <input name="endDate" type="date" />
+              </label>
+              <label>
+                <span>Plan</span>
+                <select name="plan">
+                  <option value="worker-basic">Worker Basic</option>
+                  <option value="worker-premium">Worker Premium</option>
+                  <option value="hostel-partner">Hostel Partner</option>
+                </select>
+              </label>
+              <textarea name="bio" placeholder="Short bio, role details, languages, housing notes, or work preferences"></textarea>
+            </div>
+            <button class="button button-dark" type="submit">Create account</button>
+          </form>
+        </div>
+      </section>
+
+      <section id="account-dashboard" class="account-dashboard" hidden>
+        <div class="account-hero">
+          <div>
+            <p class="eyebrow">Dashboard</p>
+            <h1 id="account-title">Your account</h1>
+            <p id="account-subtitle">Manage your profile, plan, applications, and account settings.</p>
+          </div>
+          <button id="account-logout" class="button button-light" type="button">Log out</button>
+        </div>
+
+        <div class="account-layout">
+          <aside class="account-sidebar">
+            <div id="account-avatar" class="account-avatar">H</div>
+            <h2 id="account-name">Profile name</h2>
+            <p id="account-email">email@example.com</p>
+            <span id="account-status" class="status-pill status-pending">Profile draft</span>
+            <dl class="account-mini-list">
+              <div>
+                <dt>Type</dt>
+                <dd id="account-type">Worker</dd>
+              </div>
+              <div>
+                <dt>Plan</dt>
+                <dd id="account-plan">Worker Basic</dd>
+              </div>
+              <div>
+                <dt>Billing</dt>
+                <dd id="account-billing">Setup after approval</dd>
+              </div>
+            </dl>
+            <div id="hostel-photo-gallery" class="hostel-photo-gallery" hidden></div>
+          </aside>
+
+          <div class="account-main">
+            <section id="worker-account-home" class="account-panel account-landing-panel" hidden>
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Worker home</p>
+                  <h2>Submitted applications and open communications</h2>
+                </div>
+                <a class="button button-light" href="./communications.html">Open communications</a>
+              </div>
+              <div class="account-landing-grid">
+                <article>
+                  <p class="eyebrow">Applications sent</p>
+                  <div id="worker-application-list" class="account-list"></div>
+                </article>
+                <article>
+                  <p class="eyebrow">Open threads</p>
+                  <div id="worker-thread-list" class="account-list"></div>
+                </article>
+              </div>
+            </section>
+
+            <section id="hostel-account-home" class="account-panel account-landing-panel" hidden>
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Hostel home</p>
+                  <h2>Review submitted worker applications</h2>
+                </div>
+                <a class="button button-light" href="./communications.html">Open communications</a>
+              </div>
+              <div id="hostel-application-review-list" class="hostel-review-list"></div>
+            </section>
+
+            <section class="account-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Profile</p>
+                  <h2>Edit account profile</h2>
+                </div>
+                <span id="profile-updated" class="badge">Saved locally</span>
+              </div>
+              <form id="profile-form" class="field-grid">
+                <label>
+                  <span>Profile name</span>
+                  <input name="name" required />
+                </label>
+              <label>
+                <span>Location</span>
+                <input name="location" />
+              </label>
+              <label>
+                <span>Profile photo</span>
+                <input name="photo" accept="image/*" type="file" />
+              </label>
+              <label class="worker-nationality-field">
+                <span>Nationality</span>
+                <select name="nationality" data-nationality-select></select>
+              </label>
+              <label class="hostel-website-field" hidden>
+                <span>Website</span>
+                <input name="website" />
+              </label>
+              <input name="photoData" type="hidden" />
+              <input name="photosData" type="hidden" />
+                <label>
+                  <span>Plan</span>
+                  <select name="plan">
+                    <option value="worker-basic">Worker Basic</option>
+                    <option value="worker-premium">Worker Premium</option>
+                    <option value="hostel-partner">Hostel Partner</option>
+                  </select>
+                </label>
+                <fieldset class="field-group">
+                  <legend id="tags-legend">Skills / roles</legend>
+                  <div class="checkbox-grid">
+                    <label class="checkbox-pill"><input name="tags" type="checkbox" value="Reception" />Reception</label>
+                    <label class="checkbox-pill"><input name="tags" type="checkbox" value="Housekeeping" />Housekeeping</label>
+                    <label class="checkbox-pill"><input name="tags" type="checkbox" value="Bar / cafe" />Bar / cafe</label>
+                    <label class="checkbox-pill"><input name="tags" type="checkbox" value="Events" />Events</label>
+                    <label class="checkbox-pill"><input name="tags" type="checkbox" value="Social media" />Social media</label>
+                    <label class="checkbox-pill"><input name="tags" type="checkbox" value="Maintenance" />Maintenance</label>
+                  </div>
+                </fieldset>
+                <label class="date-field">
+                  <span>Start date</span>
+                  <input name="startDate" type="date" />
+                </label>
+                <label class="date-field">
+                  <span>End date</span>
+                  <input name="endDate" type="date" />
+                </label>
+                <textarea name="bio"></textarea>
+                <button class="button button-dark" type="submit">Save profile</button>
+              </form>
+            </section>
+
+            <section id="hostel-photos-panel" class="account-panel" hidden>
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Hostel photos</p>
+                  <h2>Edit hostel photo gallery</h2>
+                </div>
+                <span id="hostel-photo-count" class="badge">0 / 10 photos</span>
+              </div>
+              <form id="hostel-photos-form" class="hostel-photos-form">
+                <label>
+                  <span>Add photos</span>
+                  <input id="account-hostel-photo-upload" name="hostelPhotos" accept="image/*" type="file" multiple />
+                </label>
+                <p class="form-note">Upload image files only. You can keep up to 10 hostel photos total, under 900 KB each.</p>
+                <button class="button button-dark" type="submit">Save hostel photos</button>
+              </form>
+              <div id="hostel-photo-editor-gallery" class="hostel-photo-editor-gallery"></div>
+            </section>
+
+            <section id="find-hostels-panel" class="account-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Find hostels</p>
+                  <h2>Browse current openings</h2>
+                </div>
+              </div>
+              <form id="opening-filters" class="opening-filters">
+                <fieldset class="field-group opening-role-filter">
+                  <legend>Skills / roles</legend>
+                  <div class="checkbox-grid">
+                    <label class="checkbox-pill"><input name="roles" type="checkbox" value="Reception" />Reception</label>
+                    <label class="checkbox-pill"><input name="roles" type="checkbox" value="Housekeeping" />Housekeeping</label>
+                    <label class="checkbox-pill"><input name="roles" type="checkbox" value="Bar / cafe" />Bar / cafe</label>
+                    <label class="checkbox-pill"><input name="roles" type="checkbox" value="Bar" />Bar</label>
+                    <label class="checkbox-pill"><input name="roles" type="checkbox" value="Events" />Events</label>
+                    <label class="checkbox-pill"><input name="roles" type="checkbox" value="Social media" />Social media</label>
+                    <label class="checkbox-pill"><input name="roles" type="checkbox" value="Maintenance" />Maintenance</label>
+                  </div>
+                </fieldset>
+                <label>
+                  <span>Available from</span>
+                  <input name="startDate" type="date" />
+                </label>
+                <label>
+                  <span>Available until</span>
+                  <input name="endDate" type="date" />
+                </label>
+                <label>
+                  <span>Country</span>
+                  <select name="country" data-opening-country></select>
+                </label>
+              </form>
+              <div id="account-opening-grid" class="account-opening-grid" aria-live="polite"></div>
+              <div class="saved-openings-block">
+                <p class="eyebrow">Saved</p>
+                <h3>Saved openings</h3>
+                <div id="saved-opening-list" class="account-list"></div>
+              </div>
+            </section>
+
+            <section class="account-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Applications</p>
+                  <h2>Application status</h2>
+                </div>
+              </div>
+              <div id="application-list" class="account-list"></div>
+            </section>
+
+            <section class="account-panel account-two-column">
+              <article>
+                <p class="eyebrow">Reviews</p>
+                <h2>Placement reviews</h2>
+                <p id="review-summary">Reviews will appear here after completed placements.</p>
+              </article>
+              <article>
+                <p class="eyebrow">Security</p>
+                <h2>Login details</h2>
+                <p>Password login is active for this account. Password reset can be added when email sending is fully connected.</p>
+              </article>
+            </section>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Hoppers. Good stays. Good people. Mud on boots..</p>
+      <p>
+        <a href="index.html">Home</a> ·
+        <a href="contact.html">Contact</a> ·
+        <a href="privacy.html">Privacy</a> ·
+        <a href="terms.html">Terms</a>
+       ·
+        <a href="./admin.html">Admin</a>
+      </p>
+    </footer>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="./account.js?v=18"></script>
+    <script src="./site.js?v=1"></script>
+    <script src="./app.js?v=1"></script>
+  </body>
+</html>

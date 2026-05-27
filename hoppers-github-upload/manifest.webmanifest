@@ -1,0 +1,19 @@
+{
+  "name": "Hoppers",
+  "short_name": "Hoppers",
+  "description": "Trusted hostel work placements for hostels and traveling workers.",
+  "start_url": "/index.html",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#f4e6c3",
+  "theme_color": "#2f261c",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

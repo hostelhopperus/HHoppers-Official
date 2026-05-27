@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2f261c" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Hoppers" />
+    <title>Apply to Opening | Hoppers</title>
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="apple-touch-icon" href="./assets/icon.svg" />
+    <link rel="stylesheet" href="./styles.css?v=30" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Hoppers home">
+        <span class="brand-mark" aria-hidden="true">H</span>
+        <span>
+          <strong>Hoppers</strong>
+          <small>Good stays. Good people. Mud on boots.</small>
+        </span>
+      </a>
+      <a class="header-signin" href="./sign-in.html">Sign in</a>
+      <details class="menu-dropdown">
+        <summary aria-label="Open site menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </summary>
+        <nav class="dropdown-nav" aria-label="Site menu">
+          <a href="./how-it-works.html">How it works</a>
+          <a href="./workers.html">For workers</a>
+          <a href="./hostels.html">For hostels</a>
+          <a href="./find-hostels.html">Find hostels</a>
+          <a href="./communications.html">Communications</a>
+        </nav>
+      </details>
+    </header>
+
+    <main>
+      <section class="page-hero application-hero">
+        <p class="eyebrow">Opening application</p>
+        <h1 id="apply-title">Apply with a clear first message.</h1>
+        <p id="apply-subtitle">
+          Review the role, explain your fit, and start a communication thread that keeps expectations in one place.
+        </p>
+      </section>
+
+      <section class="section section-white">
+        <div class="application-layout">
+          <aside class="opening-brief" aria-labelledby="opening-brief-title">
+            <p class="eyebrow">Opening brief</p>
+            <h2 id="opening-brief-title">Loading opening...</h2>
+            <p id="opening-brief-location" class="location"></p>
+            <dl class="brief-list">
+              <div>
+                <dt>Timing</dt>
+                <dd id="opening-brief-stay">Flexible dates</dd>
+              </div>
+              <div>
+                <dt>Roles</dt>
+                <dd id="opening-brief-roles"></dd>
+              </div>
+              <div>
+                <dt>What is included</dt>
+                <dd id="opening-brief-benefits"></dd>
+              </div>
+            </dl>
+          </aside>
+
+          <div id="application-gate" class="application-gate" hidden>
+            <p class="eyebrow">Account required</p>
+            <h2>Create a worker account to apply.</h2>
+            <p>
+              Hoppers applications come from reviewed worker profiles, so hostels can see who is reaching out and
+              workers can track replies in communications.
+            </p>
+            <div class="hero-actions">
+              <a id="create-worker-account" class="button button-dark" href="./account.html">Create or log in</a>
+              <a class="button button-light" href="./find-hostels.html">Keep browsing</a>
+            </div>
+          </div>
+
+          <form id="opening-application-form" class="application-form" hidden>
+            <div>
+              <p class="eyebrow">Worker message</p>
+              <h2>Send a thoughtful application.</h2>
+              <p>
+                A strong first message is specific: who you are, when you can arrive, what work you can handle, and
+                what you need clarified before committing.
+              </p>
+            </div>
+            <label>
+              <span>Your name</span>
+              <input name="name" autocomplete="name" required />
+            </label>
+            <label>
+              <span>Email</span>
+              <input name="email" autocomplete="email" type="email" required />
+            </label>
+            <div class="form-row">
+              <label>
+                <span>Available from</span>
+                <input name="startDate" type="date" />
+              </label>
+              <label>
+                <span>Available until</span>
+                <input name="endDate" type="date" />
+              </label>
+            </div>
+            <label>
+              <span>Roles you can help with</span>
+              <input name="roles" placeholder="Reception, housekeeping, events..." />
+            </label>
+            <label>
+              <span>Your first message</span>
+              <textarea
+                name="message"
+                required
+                placeholder="Introduce yourself, explain your relevant experience, your dates, and the questions you need answered."
+              ></textarea>
+            </label>
+            <label>
+              <span>Questions for the hostel</span>
+              <textarea
+                name="questions"
+                placeholder="Example: What are the weekly hours, sleeping setup, meals, days off, and minimum stay?"
+              ></textarea>
+            </label>
+            <button class="button button-dark" type="submit">Send application and open communications</button>
+            <p class="form-note">
+              Demo mode saves this application in this browser so you can see the communication flow.
+            </p>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Hoppers. Trusted hostel work placements.</p>
+      <p><a href="./find-hostels.html">Find hostels</a> · <a href="./communications.html">Communications</a> · <a href="./admin.html">Admin</a></p>
+    </footer>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="./opening-apply.js?v=3"></script>
+    <script src="./site.js?v=1"></script>
+    <script src="./app.js?v=1"></script>
+  </body>
+</html>

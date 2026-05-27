@@ -1,0 +1,36 @@
+[
+  {
+    "id": "b2e49a7d-a51d-4ee6-a8dd-ffc3ce2f1c87",
+    "type": "hostel",
+    "status": "rejected",
+    "createdAt": "2026-05-26T23:00:19.545Z",
+    "reviewedAt": "2026-05-27T04:10:14.810Z",
+    "data": {
+      "name": "Harbor Steps Hostel",
+      "email": "hello@harborsteps.example",
+      "location": "Porto, Portugal",
+      "website": "https://example.com",
+      "roles": [
+        "Reception",
+        "Events"
+      ],
+      "startDate": "2026-07-01",
+      "endDate": "2026-09-30",
+      "plan": "hostel-partner",
+      "description": "Staff bed, breakfast, three reception shifts per week, minimum stay of two months."
+    },
+    "payment": {
+      "provider": "pre-stripe",
+      "plan": "hostel-partner",
+      "planLabel": "Hostel Partner",
+      "signupFee": 100,
+      "monthlyFee": 75,
+      "signupFeeStatus": "billing_setup_pending",
+      "monthlyStatus": "not_started",
+      "stripeCustomerId": null,
+      "stripeCheckoutSessionId": null,
+      "stripeSubscriptionId": null
+    },
+    "notes": ""
+  }
+]

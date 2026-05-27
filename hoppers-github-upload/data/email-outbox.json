@@ -1,0 +1,20 @@
+[
+  {
+    "id": "40a87afa-a6e5-4bb7-9ffd-a015a1c4d9da",
+    "to": "hello@harborsteps.example",
+    "subject": "Hoppers profile update",
+    "body": "Your Hoppers profile status changed to rejected.",
+    "status": "queued",
+    "providerId": null,
+    "createdAt": "2026-05-27T04:10:14.814Z"
+  },
+  {
+    "id": "46c8a3ef-b83c-41ae-8258-9815f9ec1136",
+    "to": "hello@harborsteps.example",
+    "subject": "Your Hoppers profile was approved",
+    "body": "Your Hostel Partner profile was approved. Billing setup will be sent when payments are live.",
+    "status": "queued",
+    "providerId": null,
+    "createdAt": "2026-05-26T23:00:32.713Z"
+  }
+]

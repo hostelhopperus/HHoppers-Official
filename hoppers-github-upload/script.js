@@ -1,0 +1,422 @@
+const workerProfiles = [
+  {
+    name: "Maya R.",
+    location: "Lisbon, Portugal",
+    availability: "June - September",
+    skills: ["Reception", "Events", "Housekeeping"],
+    languages: "English, Spanish",
+    rating: "4.9",
+    verified: ["Profile reviewed", "Reference checked", "Completed placement"],
+  },
+  {
+    name: "Jonas V.",
+    location: "Amsterdam, Netherlands",
+    availability: "July - October",
+    skills: ["Bar", "Night audit", "Guest experience"],
+    languages: "Dutch, English, German",
+    rating: "4.8",
+    verified: ["ID checked", "Profile reviewed"],
+  },
+  {
+    name: "Sofia L.",
+    location: "Barcelona, Spain",
+    availability: "August - November",
+    skills: ["Social media", "Tours", "Reception"],
+    languages: "English, Italian, Spanish",
+    rating: "5.0",
+    verified: ["Profile reviewed", "Reference checked"],
+  },
+];
+
+const hostelProfiles = [
+  {
+    name: "Alpine Base Hostel",
+    location: "Interlaken, Switzerland",
+    needs: ["Housekeeping", "Breakfast", "Reception"],
+    stay: "Short-term or seasonal",
+    benefits: "Staff bed, breakfast, discounts",
+    details:
+      "A mountain base looking for practical help through busy guest weeks. Good for travelers who want a short stay, with room to extend if the fit is right.",
+    verified: true,
+  },
+  {
+    name: "Canal House Hostel",
+    location: "Amsterdam, Netherlands",
+    needs: ["Reception", "Events", "Night shift"],
+    stay: "Seasonal or longer-term",
+    benefits: "Paid hourly role, staff meals",
+    details:
+      "A city hostel with structured shifts and guest-facing work. Best for someone comfortable with steady schedules, late arrivals, and staying through a longer stretch.",
+    verified: true,
+  },
+  {
+    name: "Sunset Surf Hostel",
+    location: "Lagos, Portugal",
+    needs: ["Bar", "Tours", "Social media"],
+    stay: "Short-term trial or longer stay",
+    benefits: "Accommodation, breakfast, surf discounts",
+    details:
+      "A social hostel near the water with flexible role needs. Start with a shorter trial, then continue if the timing, team, and workload feel right.",
+    verified: false,
+  },
+];
+
+const workerGrid = document.querySelector("#worker-grid");
+const hostelGrid = document.querySelector("#hostel-grid");
+const openingGrid = document.querySelector("#opening-grid");
+const publicOpeningGrid = document.querySelector("#public-opening-grid");
+const publicOpeningFilters = document.querySelector("#public-opening-filters");
+const hostelSubhead = document.querySelector("#hostel-subhead");
+const searchInput = document.querySelector("#worker-search");
+const searchLabel = document.querySelector(".search-label");
+const profileTabButtons = document.querySelectorAll("[data-profile-tab]");
+const toast = document.querySelector("#toast");
+
+function escapeHtml(value) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, {
+    headers: {
+      "content-type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || "Request failed");
+  return body;
+}
+
+function valuesList(value, fallback = "Role TBD") {
+  if (Array.isArray(value)) return value.length ? value : [fallback];
+  return value ? [value] : [fallback];
+}
+
+function formatDateOnly(value) {
+  if (!value) return "";
+  const parts = String(value).split("-");
+  if (parts.length !== 3) return value;
+  const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  return new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", year: "numeric" }).format(date);
+}
+
+function dateRange(startDate, endDate) {
+  const start = formatDateOnly(startDate);
+  const end = formatDateOnly(endDate);
+  if (start && end) return `${start} - ${end}`;
+  if (start) return `Starts ${start}`;
+  if (end) return `Ends ${end}`;
+  return "Dates flexible";
+}
+
+function tagList(items) {
+  return items.map((item) => `<span class="badge">${escapeHtml(item)}</span>`).join("");
+}
+
+function openingLink(profile) {
+  const params = new URLSearchParams({
+    name: profile.name || "",
+    location: profile.location || "",
+  });
+  return `./opening-apply.html?${params.toString()}`;
+}
+
+function renderWorker(profile) {
+  return `
+    <article class="profile-card">
+      <div class="profile-card-inner">
+        <div class="profile-top">
+          <div>
+            <h3>${escapeHtml(profile.name)}</h3>
+            <p class="location">+ ${escapeHtml(profile.location)}</p>
+          </div>
+          <span class="badge badge-dark">* ${escapeHtml(profile.rating)}</span>
+        </div>
+        <div class="profile-meta">
+          <div>
+            <span class="label">Availability</span>
+            <p>${escapeHtml(profile.availability)}</p>
+          </div>
+          <div>
+            <span class="label">Skills</span>
+            <div class="tag-list">${tagList(profile.skills)}</div>
+          </div>
+          <div>
+            <span class="label">Languages</span>
+            <p>${escapeHtml(profile.languages)}</p>
+          </div>
+          <div>
+            <span class="label">Verification</span>
+            <div class="checks">${profile.verified.map((item) => `<span>✓ ${escapeHtml(item)}</span>`).join("")}</div>
+          </div>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderHostel(profile) {
+  return `
+    <article class="profile-card">
+      <div class="profile-card-inner">
+        <div class="profile-top">
+          <div>
+            <h3>${escapeHtml(profile.name)}</h3>
+            <p class="location">+ ${escapeHtml(profile.location)}</p>
+          </div>
+          <span class="badge">${profile.verified ? "Verified" : "Reviewing"}</span>
+        </div>
+        <div class="profile-meta">
+          <div>
+            <span class="label">Availability</span>
+            <p>${escapeHtml(profile.stay)}</p>
+          </div>
+          <div>
+            <span class="label">Roles needed</span>
+            <div class="tag-list">${tagList(profile.needs)}</div>
+          </div>
+          <div>
+            <span class="label">Benefits</span>
+            <p>${escapeHtml(profile.benefits)}</p>
+          </div>
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderOpening(profile) {
+  return `
+    <article class="profile-card opening-card">
+      <div class="profile-card-inner">
+        <div class="profile-top">
+          <div>
+            <h3>${escapeHtml(profile.name)}</h3>
+            <p class="location">+ ${escapeHtml(profile.location)}</p>
+          </div>
+          <span class="badge">${profile.verified ? "Approved" : "Reviewing"}</span>
+        </div>
+        <div class="profile-meta">
+          <div>
+            <span class="label">Opening window</span>
+            <p>${escapeHtml(profile.stay)}</p>
+          </div>
+          <div>
+            <span class="label">Roles open</span>
+            <div class="tag-list">${tagList(profile.needs)}</div>
+          </div>
+          <div>
+            <span class="label">Placement details</span>
+            <p>${escapeHtml(profile.benefits)}</p>
+          </div>
+        </div>
+        <a class="opening-link" href="${escapeHtml(openingLink(profile))}">View opening</a>
+      </div>
+    </article>
+  `;
+}
+
+function openingCountry(profile) {
+  const parts = String(profile.location || "").split(",");
+  return (parts[parts.length - 1] || "").trim();
+}
+
+function openingMatchesDates(profile, startDate, endDate) {
+  if (!startDate && !endDate) return true;
+  if (!profile.startDate && !profile.endDate) return true;
+  const openingStart = profile.startDate || "0000-01-01";
+  const openingEnd = profile.endDate || "9999-12-31";
+  const workerStart = startDate || "0000-01-01";
+  const workerEnd = endDate || "9999-12-31";
+  return openingStart <= workerEnd && workerStart <= openingEnd;
+}
+
+function submissionToHostel(submission) {
+  return {
+    name: submission.data.name || "Approved hostel",
+    location: submission.data.location || "Location pending",
+    needs: valuesList(submission.data.roles || submission.data.role),
+    startDate: submission.data.startDate || "",
+    endDate: submission.data.endDate || "",
+    stay: dateRange(submission.data.startDate, submission.data.endDate),
+    benefits: submission.data.description || "Details available after approval",
+    details: submission.data.description || "More details will be shared after the hostel review is complete.",
+    verified: true,
+  };
+}
+
+function populatePublicOpeningCountries(openings) {
+  const select = document.querySelector("[data-public-opening-country]");
+  if (!select) return;
+  const countries = [...new Set(openings.map(openingCountry).filter(Boolean))].sort();
+  select.innerHTML = `<option value="">Any country</option>${countries
+    .map((country) => `<option value="${escapeHtml(country)}">${escapeHtml(country)}</option>`)
+    .join("")}`;
+}
+
+function filterOpenings(openings, form) {
+  const formData = new FormData(form);
+  const roles = formData.getAll("roles").map((role) => String(role).toLowerCase());
+  const country = String(formData.get("country") || "");
+  const startDate = String(formData.get("startDate") || "");
+  const endDate = String(formData.get("endDate") || "");
+  return openings.filter((opening) => {
+    const roleMatches =
+      !roles.length ||
+      roles.some((role) => opening.needs.some((item) => item.toLowerCase() === role || item.toLowerCase().includes(role)));
+    const countryMatches = !country || openingCountry(opening) === country;
+    return roleMatches && countryMatches && openingMatchesDates(opening, startDate, endDate);
+  });
+}
+
+async function renderOpenings() {
+  if (!openingGrid) return;
+  openingGrid.innerHTML = `<p class="empty-state">Loading hostel openings...</p>`;
+  try {
+    const { hostels } = await fetchJson("/api/published/hostels");
+    const approvedHostels = hostels.map(submissionToHostel);
+    const openings = approvedHostels.length ? approvedHostels : hostelProfiles;
+    openingGrid.innerHTML = openings.slice(0, 4).map(renderOpening).join("");
+  } catch {
+    openingGrid.innerHTML = hostelProfiles.slice(0, 4).map(renderOpening).join("");
+  }
+}
+
+async function renderPublicOpenings() {
+  if (!publicOpeningGrid || !publicOpeningFilters) return;
+  publicOpeningGrid.innerHTML = `<p class="empty-state">Loading hostel openings...</p>`;
+  try {
+    const { hostels } = await fetchJson("/api/published/hostels");
+    const approvedHostels = hostels.map(submissionToHostel);
+    const openings = approvedHostels.length ? approvedHostels : hostelProfiles;
+    populatePublicOpeningCountries(openings);
+    const renderFiltered = () => {
+      const filtered = filterOpenings(openings, publicOpeningFilters);
+      publicOpeningGrid.innerHTML = filtered.length
+        ? filtered.map(renderOpening).join("")
+        : `<p class="empty-state">No openings match those filters yet.</p>`;
+    };
+    publicOpeningFilters.addEventListener("input", renderFiltered);
+    publicOpeningFilters.addEventListener("change", renderFiltered);
+    renderFiltered();
+  } catch {
+    populatePublicOpeningCountries(hostelProfiles);
+    publicOpeningGrid.innerHTML = hostelProfiles.map(renderOpening).join("");
+  }
+}
+
+async function renderHostels() {
+  if (!hostelGrid) return;
+  hostelGrid.innerHTML = `<p class="empty-state">Loading hostel profiles...</p>`;
+  try {
+    const { hostels } = await fetchJson("/api/published/hostels");
+    const approvedHostels = hostels.map(submissionToHostel);
+    const allHostels = [...hostelProfiles, ...approvedHostels];
+    hostelGrid.innerHTML = allHostels.map(renderHostel).join("");
+  } catch {
+    hostelGrid.innerHTML = hostelProfiles.map(renderHostel).join("");
+  }
+}
+
+function setProfileTab(tabName) {
+  if (!workerGrid || !hostelGrid || !hostelSubhead || !searchLabel) return;
+  const showingWorkers = tabName === "workers";
+  profileTabButtons.forEach((button) => {
+    button.classList.toggle("active", button.dataset.profileTab === tabName);
+  });
+  workerGrid.hidden = !showingWorkers;
+  searchLabel.hidden = !showingWorkers;
+  hostelSubhead.hidden = showingWorkers;
+  hostelGrid.hidden = showingWorkers;
+}
+
+function submissionFromForm(form) {
+  const formData = new FormData(form);
+  const data = {};
+  formData.forEach((value, key) => {
+    if (data[key]) {
+      data[key] = Array.isArray(data[key]) ? [...data[key], value] : [data[key], value];
+    } else {
+      data[key] = value;
+    }
+  });
+  const type = form.id === "hostel-form" ? "hostel" : "worker";
+  data.plan = data.plan || (type === "hostel" ? "hostel-partner" : "worker-basic");
+  return { type, data };
+}
+
+function renderWorkers() {
+  if (!workerGrid || !searchInput) return;
+  const query = searchInput.value.trim().toLowerCase();
+  const filtered = workerProfiles.filter((profile) => {
+    const text = `${profile.name} ${profile.location} ${profile.skills.join(" ")} ${profile.languages}`.toLowerCase();
+    return text.includes(query);
+  });
+
+  workerGrid.innerHTML = filtered.length
+    ? filtered.map(renderWorker).join("")
+    : `<p class="empty-state">No workers match that search yet.</p>`;
+}
+
+function showToast(message) {
+  if (!toast) return;
+  toast.textContent = message;
+  toast.classList.add("visible");
+  window.setTimeout(() => toast.classList.remove("visible"), 2600);
+}
+
+if (searchInput) searchInput.addEventListener("input", renderWorkers);
+profileTabButtons.forEach((button) => {
+  button.addEventListener("click", () => setProfileTab(button.dataset.profileTab));
+});
+
+renderHostels();
+renderOpenings();
+renderPublicOpenings();
+renderWorkers();
+if (profileTabButtons.length) setProfileTab("workers");
+
+document.querySelectorAll(".signup-form").forEach((form) => {
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const type = form.id === "hostel-form" ? "hostel" : "worker";
+    const selectedOptions = form.querySelectorAll('input[type="checkbox"]:checked');
+    const startDate = form.querySelector('[name="startDate"]').value;
+    const endDate = form.querySelector('[name="endDate"]').value;
+    if (!selectedOptions.length) {
+      showToast(type === "hostel" ? "Choose at least one role." : "Choose at least one skill.");
+      return;
+    }
+    if (startDate && endDate && endDate < startDate) {
+      showToast("End date must be after the start date.");
+      return;
+    }
+
+    const button = form.querySelector('button[type="submit"]');
+    button.disabled = true;
+    try {
+      const result = await fetchJson("/api/submissions", {
+        method: "POST",
+        body: JSON.stringify(submissionFromForm(form)),
+      });
+      form.reset();
+      if (result.checkoutUrl) {
+        showToast("Profile saved. Opening secure Stripe checkout...");
+        window.location.href = result.checkoutUrl;
+        return;
+      }
+      showToast("Application saved. Billing setup will come later if approved.");
+    } catch (error) {
+      showToast(error.message || "Could not save submission.");
+    } finally {
+      button.disabled = false;
+    }
+  });
+});

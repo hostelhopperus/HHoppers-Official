@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Profiles | Hoppers</title>
+    <link rel="stylesheet" href="./styles.css?v=25" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Hoppers home">
+        <span class="brand-mark" aria-hidden="true">H</span>
+        <span><strong>Hoppers</strong><small>Good stays. Good people. Mud on boots.</small></span>
+      </a>
+      <a class="header-signin" href="./sign-in.html">Sign in</a>
+      <details class="menu-dropdown">
+        <summary aria-label="Open site menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </summary>
+        <nav class="dropdown-nav" aria-label="Site menu">
+          <a href="./how-it-works.html">How it works</a>
+          <a href="./workers.html">For workers</a>
+          <a href="./hostels.html">For hostels</a>
+          <a href="./find-hostels.html">Find hostels</a>
+        </nav>
+      </details>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Profiles</p>
+        <h1>Sample profiles show the signals Hoppers makes visible.</h1>
+        <p>
+          Profiles are designed to make practical placement decisions easier: skills, location, availability,
+          verification notes, benefits, and review status.
+        </p>
+      </section>
+
+      <section class="section" id="profiles">
+        <div class="profile-tools">
+          <div class="segmented" aria-label="Profile tabs">
+            <button type="button" class="active" data-profile-tab="workers">Workers</button>
+            <button type="button" data-profile-tab="hostels">Hostels</button>
+          </div>
+          <label class="search-label">
+            <span class="sr-only">Search worker skills or location</span>
+            <input id="worker-search" type="search" placeholder="Search worker skills or location" />
+          </label>
+        </div>
+        <div id="worker-grid" class="card-grid" aria-live="polite"></div>
+        <h2 id="hostel-subhead" class="subhead">Sample hostel profiles</h2>
+        <div id="hostel-grid" class="card-grid"></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Hoppers. Trusted hostel work placements.</p>
+      <p><a href="./workers.html">Workers</a> · <a href="./hostels.html">Hostels</a> · <a href="./join.html">Apply</a> ·
+        <a href="./admin.html">Admin</a>
+      </p>
+    </footer>
+
+    <script src="./script.js?v=14"></script>
+    <script src="./site.js?v=1"></script>
+  </body>
+</html>

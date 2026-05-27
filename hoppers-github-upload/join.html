@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Join | Hoppers</title>
+    <link rel="stylesheet" href="./styles.css?v=25" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Hoppers home">
+        <span class="brand-mark" aria-hidden="true">H</span>
+        <span><strong>Hoppers</strong><small>Good stays. Good people. Mud on boots.</small></span>
+      </a>
+      <a class="header-signin" href="./sign-in.html">Sign in</a>
+      <details class="menu-dropdown">
+        <summary aria-label="Open site menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </summary>
+        <nav class="dropdown-nav" aria-label="Site menu">
+          <a href="./how-it-works.html">How it works</a>
+          <a href="./workers.html">For workers</a>
+          <a href="./hostels.html">For hostels</a>
+          <a href="./find-hostels.html">Find hostels</a>
+        </nav>
+      </details>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Join Hoppers</p>
+        <h1>Apply for review as a worker or hostel partner.</h1>
+        <p>
+          Applications are reviewed before profiles are approved. No payment information is collected here; approved
+          profiles receive a secure billing setup link later.
+        </p>
+      </section>
+
+      <section class="section">
+        <div class="forms-grid">
+          <form id="worker-form" class="signup-form">
+            <h2>Create a worker profile</h2>
+            <p>Share your skills, dates, location, and the kind of hostel work you are ready for.</p>
+            <div class="field-grid">
+              <input name="name" required placeholder="Full name" />
+              <input name="email" required type="email" placeholder="Email" />
+              <input name="location" placeholder="Current location" />
+              <input name="nationality" placeholder="Nationality / passport(s)" />
+              <fieldset class="field-group">
+                <legend>Skills</legend>
+                <div class="checkbox-grid">
+                  <label class="checkbox-pill"><input name="skills" type="checkbox" value="Reception" />Reception</label>
+                  <label class="checkbox-pill"><input name="skills" type="checkbox" value="Housekeeping" />Housekeeping</label>
+                  <label class="checkbox-pill"><input name="skills" type="checkbox" value="Bar / cafe" />Bar / cafe</label>
+                  <label class="checkbox-pill"><input name="skills" type="checkbox" value="Events" />Events</label>
+                  <label class="checkbox-pill"><input name="skills" type="checkbox" value="Social media" />Social media</label>
+                  <label class="checkbox-pill"><input name="skills" type="checkbox" value="Maintenance" />Maintenance</label>
+                </div>
+              </fieldset>
+              <label class="date-field">
+                <span>Available start date</span>
+                <input name="startDate" type="date" />
+              </label>
+              <label class="date-field">
+                <span>Available end date</span>
+                <input name="endDate" type="date" />
+              </label>
+              <textarea name="bio" placeholder="Short bio, experience, languages, and countries where you can legally work"></textarea>
+              <fieldset class="field-group billing-group">
+                <legend>Plan</legend>
+                <div class="plan-grid">
+                  <label class="plan-option">
+                    <input name="plan" type="radio" value="worker-basic" checked />
+                    <span>
+                      <strong>Basic</strong>
+                      <small>$10 signup later, then $5/month after approval</small>
+                    </span>
+                  </label>
+                  <label class="plan-option">
+                    <input name="plan" type="radio" value="worker-premium" />
+                    <span>
+                      <strong>Premium</strong>
+                      <small>$10 signup later, then $10/month after approval</small>
+                    </span>
+                  </label>
+                </div>
+                <p class="payment-note">No payment info needed yet. If approved, Hoppers will email a secure billing setup link.</p>
+              </fieldset>
+            </div>
+            <button class="button button-dark" type="submit">Submit worker profile <span aria-hidden="true">→</span></button>
+          </form>
+
+          <form id="hostel-form" class="signup-form">
+            <h2>Create a hostel profile</h2>
+            <p>Share your roles, dates, location, and what the placement actually offers.</p>
+            <div class="field-grid">
+              <input name="name" required placeholder="Hostel name" />
+              <input name="email" required type="email" placeholder="Contact email" />
+              <input name="location" placeholder="City / country" />
+              <input name="website" placeholder="Website" />
+              <fieldset class="field-group">
+                <legend>Roles needed</legend>
+                <div class="checkbox-grid">
+                  <label class="checkbox-pill"><input name="roles" type="checkbox" value="Reception" />Reception</label>
+                  <label class="checkbox-pill"><input name="roles" type="checkbox" value="Housekeeping" />Housekeeping</label>
+                  <label class="checkbox-pill"><input name="roles" type="checkbox" value="Bar / cafe" />Bar / cafe</label>
+                  <label class="checkbox-pill"><input name="roles" type="checkbox" value="Events" />Events</label>
+                  <label class="checkbox-pill"><input name="roles" type="checkbox" value="Social media" />Social media</label>
+                  <label class="checkbox-pill"><input name="roles" type="checkbox" value="Maintenance" />Maintenance</label>
+                </div>
+              </fieldset>
+              <label class="date-field">
+                <span>Placement start date</span>
+                <input name="startDate" type="date" />
+              </label>
+              <label class="date-field">
+                <span>Placement end date</span>
+                <input name="endDate" type="date" />
+              </label>
+              <textarea name="description" placeholder="Describe the role, housing, meals, pay/work-exchange details, and minimum stay"></textarea>
+              <fieldset class="field-group billing-group">
+                <legend>Plan</legend>
+                <input name="plan" type="hidden" value="hostel-partner" />
+                <div class="plan-summary">
+                  <strong>Hostel Partner</strong>
+                  <span>$100 signup later, then $75/month after approval</span>
+                </div>
+                <p class="payment-note">No payment info needed yet. If approved, Hoppers will email a secure billing setup link.</p>
+              </fieldset>
+            </div>
+            <button class="button button-dark" type="submit">Submit hostel profile <span aria-hidden="true">→</span></button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Hoppers. Trusted hostel work placements.</p>
+      <p><a href="./pricing.html">Pricing</a> · <a href="./faq.html">FAQ</a> · <a href="./contact.html">Contact</a></p>
+    </footer>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="./script.js?v=14"></script>
+    <script src="./site.js?v=1"></script>
+  </body>
+</html>

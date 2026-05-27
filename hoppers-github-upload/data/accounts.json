@@ -1,0 +1,70 @@
+[
+  {
+    "id": "0161042c-446e-406a-8e41-dc1810a7d0f0",
+    "type": "hostel",
+    "email": "jvaneyndhoven18@icloud",
+    "passwordHash": "948ecfde3a92403d96f4c96d114387f5db34d78a6e827efdbeba3549801cbda8e213f07a84465959951cb84f1b4dbdfa87fb139db50c1315a5f25f33ebe2aa88",
+    "passwordSalt": "96593f3a8d1abf664f09c3f6574c8197",
+    "status": "approved",
+    "createdAt": "2026-05-27T04:39:26.144Z",
+    "updatedAt": "2026-05-27T04:41:29.761Z",
+    "profile": {
+      "name": "Ski and stay hostel",
+      "location": "Hilo Hawaii",
+      "website": "",
+      "nationality": "",
+      "tags": [
+        "Reception",
+        "Housekeeping",
+        "Events"
+      ],
+      "startDate": "2026-05-29",
+      "endDate": "2026-08-21",
+      "bio": "need someone for the summer general staff, housekeeping, reception",
+      "photo": "",
+      "plan": "hostel-partner"
+    },
+    "billing": {
+      "provider": "pre-stripe",
+      "plan": "hostel-partner",
+      "planLabel": "Hostel Partner",
+      "signupFee": 100,
+      "monthlyFee": 75,
+      "status": "approval_complete_billing_pending"
+    }
+  },
+  {
+    "id": "ed1adae0-b894-45ff-8ba9-371ce373196a",
+    "type": "worker",
+    "email": "jvaneyndhoven18@gmail.com",
+    "passwordHash": "745485ea40a7a2c38369c0026956a0cc22bba13bdd4e9d8e2d0d81342d3f631387b7367f7caf3b3ae7db9edd5e111bc4a8bae134cbb64dd5df56e56b2c480c0c",
+    "passwordSalt": "bca2d7452d3386259531e55fb14835cf",
+    "status": "approved",
+    "createdAt": "2026-05-26T21:31:37.811Z",
+    "updatedAt": "2026-05-26T23:00:07.028Z",
+    "profile": {
+      "name": "Justin van Eyndhoven",
+      "location": "Hilo Hawaii",
+      "website": "US/Netherlands",
+      "nationality": "",
+      "tags": [
+        "Reception",
+        "Housekeeping",
+        "Bar / cafe",
+        "Events"
+      ],
+      "startDate": "2026-05-27",
+      "endDate": "2026-06-18",
+      "bio": "I am from the USA. I have my degree from University of Connecitcut in environemntal science. I have experience working in housekeeping and reception. I am friendly and get along with most everyone. I wake up early and go to bed early",
+      "plan": "worker-premium"
+    },
+    "billing": {
+      "provider": "pre-stripe",
+      "plan": "worker-premium",
+      "planLabel": "Worker Premium",
+      "signupFee": 10,
+      "monthlyFee": 10,
+      "status": "approval_complete_billing_pending"
+    }
+  }
+]

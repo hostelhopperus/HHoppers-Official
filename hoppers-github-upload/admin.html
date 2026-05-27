@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hoppers Admin</title>
+    <link rel="stylesheet" href="./styles.css?v=27" />
+  </head>
+  <body class="admin-page">
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Hoppers home">
+        <span class="brand-mark" aria-hidden="true">H</span>
+        <span>
+          <strong>Hoppers</strong>
+          <small>Admin review dashboard</small>
+        </span>
+      </a>
+      <a class="header-signin" href="./index.html">Public site</a>
+      <details class="menu-dropdown">
+        <summary aria-label="Open admin menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </summary>
+        <nav class="dropdown-nav" aria-label="Admin menu">
+          <a href="./find-hostels.html">Find hostels</a>
+          <a href="./sign-in.html">Sign in</a>
+          <a href="./account.html">Account</a>
+        </nav>
+      </details>
+    </header>
+
+    <main>
+      <section id="admin-login" class="admin-login">
+        <form class="admin-login-card">
+          <p class="eyebrow">Admin access</p>
+          <h1>Run the Hoppers review desk.</h1>
+          <p>
+            Review created worker and hostel accounts, approve profiles, reject poor fits, and check billing setup
+            status before anyone is treated as active on the network.
+          </p>
+          <label>
+            <span>Admin code</span>
+            <input id="admin-code" autocomplete="current-password" placeholder="Enter admin code" />
+          </label>
+          <button class="button button-dark" type="submit">Open admin dashboard</button>
+          <p class="demo-code">Demo code: <strong>finntazer_69</strong></p>
+        </form>
+      </section>
+
+      <section id="admin-dashboard" class="admin-dashboard" hidden>
+        <div class="admin-hero">
+          <div>
+            <p class="eyebrow">Administration</p>
+            <h1>Review accounts, openings, and payment readiness.</h1>
+            <p>
+              Approve worker and hostel accounts after checking profile details and billing status. Legacy form
+              submissions are still available in a separate queue.
+            </p>
+          </div>
+          <div class="admin-actions">
+            <a class="button button-light" href="./sign-in.html">Create account</a>
+            <button id="seed-demo" class="button button-light" type="button">Add demo opening</button>
+            <button id="logout-admin" class="button button-dark" type="button">Lock admin</button>
+          </div>
+        </div>
+
+        <div class="admin-stats" aria-label="Review stats">
+          <article>
+            <span id="stat-pending">0</span>
+            <p>Needs review</p>
+          </article>
+          <article>
+            <span id="stat-approved">0</span>
+            <p>Approved</p>
+          </article>
+          <article>
+            <span id="stat-rejected">0</span>
+            <p>Rejected</p>
+          </article>
+        </div>
+
+        <div class="admin-toolbar">
+          <div class="segmented" aria-label="Admin queue">
+            <button class="active" type="button" data-view="accounts">Workers</button>
+            <button type="button" data-view="submissions">Hostel accounts</button>
+          </div>
+          <div class="segmented" aria-label="Review filter">
+            <button class="active" type="button" data-filter="all">All</button>
+            <button type="button" data-filter="pending">Pending</button>
+            <button type="button" data-filter="approved">Approved</button>
+            <button type="button" data-filter="rejected">Rejected</button>
+          </div>
+          <button id="clear-rejected" class="button button-light" type="button">Clear rejected hostels</button>
+        </div>
+
+        <div id="account-review-list" class="submission-list" aria-live="polite"></div>
+        <div id="submission-list" class="submission-list" aria-live="polite" hidden></div>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="./admin.js?v=15"></script>
+  </body>
+</html>

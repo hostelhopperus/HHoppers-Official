@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#2f261c" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Hoppers" />
+    <title>Find Hostels | Hoppers</title>
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="apple-touch-icon" href="./assets/icon.svg" />
+    <link rel="stylesheet" href="./styles.css?v=28" />
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Hoppers home">
+        <span class="brand-mark" aria-hidden="true">H</span>
+        <span>
+          <strong>Hoppers</strong>
+          <small>Good stays. Good people. Mud on boots.</small>
+        </span>
+      </a>
+      <a class="header-signin" href="./sign-in.html">Sign in</a>
+      <details class="menu-dropdown">
+        <summary aria-label="Open site menu">
+          <span></span>
+          <span></span>
+          <span></span>
+        </summary>
+        <nav class="dropdown-nav" aria-label="Site menu">
+          <a href="./how-it-works.html">How it works</a>
+          <a href="./workers.html">For workers</a>
+          <a href="./hostels.html">For hostels</a>
+          <a href="./find-hostels.html">Find hostels</a>
+        </nav>
+      </details>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <p class="eyebrow">Find hostels</p>
+        <h1>Browse hostel openings by role, date, and country.</h1>
+        <p>
+          Start with public openings, then sign in to save your profile and manage applications from your dashboard.
+        </p>
+      </section>
+
+      <section class="section section-white">
+        <form id="public-opening-filters" class="opening-filters">
+          <fieldset class="field-group opening-role-filter">
+            <legend>Skills / roles</legend>
+            <div class="checkbox-grid">
+              <label class="checkbox-pill"><input name="roles" type="checkbox" value="Reception" />Reception</label>
+              <label class="checkbox-pill"><input name="roles" type="checkbox" value="Housekeeping" />Housekeeping</label>
+              <label class="checkbox-pill"><input name="roles" type="checkbox" value="Bar / cafe" />Bar / cafe</label>
+              <label class="checkbox-pill"><input name="roles" type="checkbox" value="Bar" />Bar</label>
+              <label class="checkbox-pill"><input name="roles" type="checkbox" value="Events" />Events</label>
+              <label class="checkbox-pill"><input name="roles" type="checkbox" value="Social media" />Social media</label>
+              <label class="checkbox-pill"><input name="roles" type="checkbox" value="Maintenance" />Maintenance</label>
+            </div>
+          </fieldset>
+          <label>
+            <span>Available from</span>
+            <input name="startDate" type="date" />
+          </label>
+          <label>
+            <span>Available until</span>
+            <input name="endDate" type="date" />
+          </label>
+          <label>
+            <span>Country</span>
+            <select name="country" data-public-opening-country></select>
+          </label>
+        </form>
+        <div id="public-opening-grid" class="card-grid" aria-live="polite"></div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <p>Hoppers. Trusted hostel work placements.</p>
+      <p><a href="./sign-in.html">Sign in</a> · <a href="./workers.html">For workers</a> · <a href="./faq.html">FAQ</a> ·
+        <a href="./admin.html">Admin</a>
+      </p>
+    </footer>
+
+    <script src="./script.js?v=15"></script>
+    <script src="./site.js?v=1"></script>
+    <script src="./app.js?v=1"></script>
+  </body>
+</html>

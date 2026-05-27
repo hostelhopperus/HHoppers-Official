@@ -1,0 +1,217 @@
+const signinForm = document.querySelector("#signin-form");
+const createProfileForm = document.querySelector("#create-profile-form");
+const authModeButtons = document.querySelectorAll("[data-auth-mode]");
+const signinTypeButtons = document.querySelectorAll("[data-signin-type]");
+const signinTypeTitle = document.querySelector("#signin-type-title");
+const signinTypeCopy = document.querySelector("#signin-type-copy");
+const createNameLabel = document.querySelector("#create-name-label");
+const createTagsLegend = document.querySelector("#create-tags-legend");
+const createStartLabel = document.querySelector("#create-start-label");
+const createEndLabel = document.querySelector("#create-end-label");
+const toast = document.querySelector("#toast");
+
+const countries = [
+  "Afghanistan", "Albania", "Algeria", "Andorra", "Angola", "Antigua and Barbuda", "Argentina", "Armenia", "Australia",
+  "Austria", "Azerbaijan", "Bahamas", "Bahrain", "Bangladesh", "Barbados", "Belarus", "Belgium", "Belize", "Benin",
+  "Bhutan", "Bolivia", "Bosnia and Herzegovina", "Botswana", "Brazil", "Brunei", "Bulgaria", "Burkina Faso", "Burundi",
+  "Cabo Verde", "Cambodia", "Cameroon", "Canada", "Central African Republic", "Chad", "Chile", "China", "Colombia",
+  "Comoros", "Congo", "Costa Rica", "Cote d'Ivoire", "Croatia", "Cuba", "Cyprus", "Czechia", "Democratic Republic of the Congo",
+  "Denmark", "Djibouti", "Dominica", "Dominican Republic", "Ecuador", "Egypt", "El Salvador", "Equatorial Guinea", "Eritrea",
+  "Estonia", "Eswatini", "Ethiopia", "Fiji", "Finland", "France", "Gabon", "Gambia", "Georgia", "Germany", "Ghana",
+  "Greece", "Grenada", "Guatemala", "Guinea", "Guinea-Bissau", "Guyana", "Haiti", "Honduras", "Hungary", "Iceland",
+  "India", "Indonesia", "Iran", "Iraq", "Ireland", "Israel", "Italy", "Jamaica", "Japan", "Jordan", "Kazakhstan", "Kenya",
+  "Kiribati", "Kuwait", "Kyrgyzstan", "Laos", "Latvia", "Lebanon", "Lesotho", "Liberia", "Libya", "Liechtenstein",
+  "Lithuania", "Luxembourg", "Madagascar", "Malawi", "Malaysia", "Maldives", "Mali", "Malta", "Marshall Islands",
+  "Mauritania", "Mauritius", "Mexico", "Micronesia", "Moldova", "Monaco", "Mongolia", "Montenegro", "Morocco",
+  "Mozambique", "Myanmar", "Namibia", "Nauru", "Nepal", "Netherlands", "New Zealand", "Nicaragua", "Niger", "Nigeria",
+  "North Korea", "North Macedonia", "Norway", "Oman", "Pakistan", "Palau", "Palestine", "Panama", "Papua New Guinea",
+  "Paraguay", "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia", "Rwanda", "Saint Kitts and Nevis",
+  "Saint Lucia", "Saint Vincent and the Grenadines", "Samoa", "San Marino", "Sao Tome and Principe", "Saudi Arabia",
+  "Senegal", "Serbia", "Seychelles", "Sierra Leone", "Singapore", "Slovakia", "Slovenia", "Solomon Islands", "Somalia",
+  "South Africa", "South Korea", "South Sudan", "Spain", "Sri Lanka", "Sudan", "Suriname", "Sweden", "Switzerland",
+  "Syria", "Tajikistan", "Tanzania", "Thailand", "Timor-Leste", "Togo", "Tonga", "Trinidad and Tobago", "Tunisia",
+  "Turkey", "Turkmenistan", "Tuvalu", "Uganda", "Ukraine", "United Arab Emirates", "United Kingdom", "United States",
+  "Uruguay", "Uzbekistan", "Vanuatu", "Vatican City", "Venezuela", "Vietnam", "Yemen", "Zambia", "Zimbabwe",
+];
+
+let selectedType = "worker";
+let selectedMode = "signin";
+
+const panelCopy = {
+  signin: {
+    worker: {
+      title: "Worker sign in",
+      copy: "Open your worker profile, placement details, reviews, and account settings.",
+    },
+    hostel: {
+      title: "Hostel sign in",
+      copy: "Open your hostel profile, partner details, applications, and account settings.",
+    },
+  },
+  create: {
+    worker: {
+      title: "Create a worker profile",
+      copy: "Start a reviewed worker profile with your skills, dates, languages, and placement preferences.",
+    },
+    hostel: {
+      title: "Create a hostel profile",
+      copy: "Start a reviewed hostel profile with your open roles, timing, location, and placement details.",
+    },
+  },
+};
+
+function showToast(message) {
+  toast.textContent = message;
+  toast.classList.add("visible");
+  window.setTimeout(() => toast.classList.remove("visible"), 2600);
+}
+
+async function fetchJson(url, options = {}) {
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    headers: {
+      "content-type": "application/json",
+      ...(options.headers || {}),
+    },
+    ...options,
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.error || "Request failed");
+  return body;
+}
+
+function syncPlanOptions() {
+  const plan = createProfileForm.elements.plan;
+  plan.querySelector('option[value="hostel-partner"]').disabled = selectedType !== "hostel";
+  plan.querySelector('option[value="worker-basic"]').disabled = selectedType === "hostel";
+  plan.querySelector('option[value="worker-premium"]').disabled = selectedType === "hostel";
+  plan.value = selectedType === "hostel" ? "hostel-partner" : "worker-basic";
+  createProfileForm.querySelectorAll(".worker-nationality-field").forEach((field) => {
+    field.hidden = selectedType === "hostel";
+  });
+  createProfileForm.querySelectorAll(".hostel-website-field").forEach((field) => {
+    field.hidden = selectedType !== "hostel";
+  });
+}
+
+function populateNationalitySelects() {
+  document.querySelectorAll("[data-nationality-select]").forEach((select) => {
+    select.innerHTML = `<option value="">Select nationality</option>${countries.map((country) => `<option value="${country}">${country}</option>`).join("")}`;
+  });
+}
+
+function fileToDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.addEventListener("load", () => resolve(reader.result));
+    reader.addEventListener("error", () => reject(new Error("Could not read image.")));
+    reader.readAsDataURL(file);
+  });
+}
+
+function syncPanel() {
+  const copy = panelCopy[selectedMode][selectedType];
+  signinTypeTitle.textContent = copy.title;
+  signinTypeCopy.textContent = copy.copy;
+  signinForm.hidden = selectedMode !== "signin";
+  createProfileForm.hidden = selectedMode !== "create";
+
+  createNameLabel.textContent = selectedType === "hostel" ? "Hostel name" : "Full name";
+  createTagsLegend.textContent = selectedType === "hostel" ? "Roles needed" : "Skills";
+  createStartLabel.textContent = selectedType === "hostel" ? "Placement start date" : "Available start date";
+  createEndLabel.textContent = selectedType === "hostel" ? "Placement end date" : "Available end date";
+  syncPlanOptions();
+}
+
+async function profileFromCreateForm() {
+  const formData = new FormData(createProfileForm);
+  const startDate = String(formData.get("startDate") || "");
+  const endDate = String(formData.get("endDate") || "");
+  if (startDate && endDate && endDate < startDate) {
+    throw new Error("End date must be after the start date.");
+  }
+  const photoFile = createProfileForm.elements.photo?.files?.[0];
+  if (photoFile && !photoFile.type.startsWith("image/")) throw new Error("Choose an image file for the profile photo.");
+  if (photoFile && photoFile.size > 900 * 1024) throw new Error("Profile photo must be under 900 KB.");
+  return {
+    name: String(formData.get("name") || "").trim(),
+    location: String(formData.get("location") || "").trim(),
+    website: String(formData.get("website") || "").trim(),
+    nationality: String(formData.get("nationality") || "").trim(),
+    photo: photoFile ? await fileToDataUrl(photoFile) : "",
+    tags: formData.getAll("tags"),
+    startDate,
+    endDate,
+    plan: String(formData.get("plan") || ""),
+    bio: String(formData.get("bio") || "").trim(),
+  };
+}
+
+authModeButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    selectedMode = button.dataset.authMode;
+    authModeButtons.forEach((item) => item.classList.toggle("active", item === button));
+    syncPanel();
+  });
+});
+
+signinTypeButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    selectedType = button.dataset.signinType;
+    signinTypeButtons.forEach((item) => item.classList.toggle("active", item === button));
+    syncPanel();
+  });
+});
+
+signinForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formData = new FormData(signinForm);
+  const button = signinForm.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    await fetchJson("/api/account/login", {
+      method: "POST",
+      body: JSON.stringify({
+        email: formData.get("email"),
+        password: formData.get("password"),
+      }),
+    });
+    showToast("Signed in. Opening your dashboard...");
+    window.setTimeout(() => {
+      window.location.href = "./account.html";
+    }, 500);
+  } catch (error) {
+    showToast(error.message || "Could not sign in.");
+  } finally {
+    button.disabled = false;
+  }
+});
+
+createProfileForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formData = new FormData(createProfileForm);
+  const button = createProfileForm.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    await fetchJson("/api/account/register", {
+      method: "POST",
+      body: JSON.stringify({
+        type: selectedType,
+        email: formData.get("email"),
+        password: formData.get("password"),
+        profile: await profileFromCreateForm(),
+      }),
+    });
+    showToast("Profile created. Opening your dashboard...");
+    window.setTimeout(() => {
+      window.location.href = "./account.html";
+    }, 500);
+  } catch (error) {
+    showToast(error.message || "Could not create profile.");
+  } finally {
+    button.disabled = false;
+  }
+});
+
+populateNationalitySelects();
+syncPanel();
