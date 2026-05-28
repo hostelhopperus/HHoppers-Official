@@ -8,6 +8,8 @@ const createNameLabel = document.querySelector("#create-name-label");
 const createTagsLegend = document.querySelector("#create-tags-legend");
 const createStartLabel = document.querySelector("#create-start-label");
 const createEndLabel = document.querySelector("#create-end-label");
+const createPlanOptions = document.querySelector("#create-plan-options");
+const planSummary = document.querySelector("#plan-summary");
 const toast = document.querySelector("#toast");
 
 const countries = [
@@ -36,6 +38,71 @@ const countries = [
 
 let selectedType = "worker";
 let selectedMode = "signin";
+
+const signupPlans = {
+  "worker-basic": {
+    type: "worker",
+    name: "Worker Basic Plan",
+    price: "$2.99/month",
+    features: [
+      "Create profile",
+      "Apply to limited hostels",
+      "Upload basic info, skills, dates, and languages",
+      "Get reviews after placements",
+    ],
+  },
+  "worker-premium": {
+    type: "worker",
+    name: "Worker Premium Plan",
+    price: "$5.99/month",
+    features: [
+      "Everything in Basic",
+      "Verified profile badge",
+      "Apply to unlimited hostels",
+      "Appear higher in hostel searches",
+      "Add video intro",
+      "Priority placement alerts",
+      "Profile boosts",
+      "More photos and references",
+    ],
+  },
+  "hostel-basic": {
+    type: "hostel",
+    name: "Hostel Basic Plan",
+    price: "$99/month",
+    features: [
+      "Hostel profile page",
+      "Post basic work opportunities",
+      "Receive worker applications",
+      "View limited worker profiles",
+      "Basic messaging/contact",
+    ],
+  },
+  "hostel-premium": {
+    type: "hostel",
+    name: "Hostel Premium Plan",
+    price: "$199/month",
+    features: [
+      "Everything in Basic",
+      "Featured hostel placement",
+      "Unlimited job/volunteer postings",
+      "Full access to verified worker profiles",
+      "Reviews/ratings from past placements",
+      "Priority ranking in search",
+      "Direct messaging with workers",
+      "Application tracking dashboard",
+      "Verified Hostel badge",
+      "Support from Hoppers",
+    ],
+  },
+};
+
+const paymentPages = {
+  "worker-basic": "./payment-worker-basic.html",
+  "worker-premium": "./payment-worker-premium.html",
+  "hostel-basic": "./payment-hostel-basic.html",
+  "hostel-premium": "./payment-hostel-premium.html",
+};
 
 const panelCopy = {
   signin: {
@@ -81,17 +148,52 @@ async function fetchJson(url, options = {}) {
 }
 
 function syncPlanOptions() {
-  const plan = createProfileForm.elements.plan;
-  plan.querySelector('option[value="hostel-partner"]').disabled = selectedType !== "hostel";
-  plan.querySelector('option[value="worker-basic"]').disabled = selectedType === "hostel";
-  plan.querySelector('option[value="worker-premium"]').disabled = selectedType === "hostel";
-  plan.value = selectedType === "hostel" ? "hostel-partner" : "worker-basic";
+  const currentPlan = createProfileForm.elements.plan.value;
+  const availablePlans = Object.entries(signupPlans).filter(([, plan]) => plan.type === selectedType);
+  const selectedPlan = availablePlans.some(([key]) => key === currentPlan) ? currentPlan : availablePlans[0][0];
+  createProfileForm.elements.plan.value = selectedPlan;
+  createPlanOptions.innerHTML = availablePlans
+    .map(([key, plan]) => {
+      const features = plan.features.map((feature) => `<li>${feature}</li>`).join("");
+      return `
+        <label class="plan-option">
+          <input name="plan-card" type="radio" value="${key}" ${key === selectedPlan ? "checked" : ""} />
+          <span>
+            <strong>${plan.name}</strong>
+            <span class="plan-price">${plan.price}</span>
+            <ul class="plan-features">${features}</ul>
+          </span>
+        </label>
+      `;
+    })
+    .join("");
+  createPlanOptions.querySelectorAll('input[name="plan-card"]').forEach((input) => {
+    input.addEventListener("change", () => {
+      createProfileForm.elements.plan.value = input.value;
+      renderPlanSummary(input.value);
+    });
+  });
+  renderPlanSummary(selectedPlan);
   createProfileForm.querySelectorAll(".worker-nationality-field").forEach((field) => {
     field.hidden = selectedType === "hostel";
   });
   createProfileForm.querySelectorAll(".hostel-website-field").forEach((field) => {
     field.hidden = selectedType !== "hostel";
   });
+}
+
+function renderPlanSummary(planKey) {
+  const plan = signupPlans[planKey];
+  if (!plan) return;
+  planSummary.innerHTML = `
+    <strong>${plan.name}</strong>
+    <span>${plan.price}. Payment will be handled by Stripe before Hoppers creates this account.</span>
+  `;
+}
+
+function createClientReferenceId() {
+  const randomPart = Math.random().toString(36).slice(2, 10);
+  return `hoppers_${Date.now()}_${randomPart}`;
 }
 
 function populateNationalitySelects() {
@@ -135,7 +237,7 @@ async function profileFromCreateForm() {
   if (photoFile && photoFile.size > 900 * 1024) throw new Error("Profile photo must be under 900 KB.");
   return {
     name: String(formData.get("name") || "").trim(),
-    location: String(formData.get("location") || "").trim(),
+    location: "",
     website: String(formData.get("website") || "").trim(),
     nationality: String(formData.get("nationality") || "").trim(),
     photo: photoFile ? await fileToDataUrl(photoFile) : "",
@@ -193,24 +295,36 @@ createProfileForm.addEventListener("submit", async (event) => {
   const button = createProfileForm.querySelector('button[type="submit"]');
   button.disabled = true;
   try {
-    await fetchJson("/api/account/register", {
-      method: "POST",
-      body: JSON.stringify({
-        type: selectedType,
-        email: formData.get("email"),
-        password: formData.get("password"),
-        profile: await profileFromCreateForm(),
-      }),
-    });
-    showToast("Profile created. Opening your dashboard...");
+    const profile = await profileFromCreateForm();
+    const plan = profile.plan;
+    const email = String(formData.get("email") || "").trim();
+    const clientReferenceId = createClientReferenceId();
+    sessionStorage.setItem("hoppersPendingAccount", JSON.stringify({
+      type: selectedType,
+      email,
+      password: formData.get("password"),
+      profile,
+      plan,
+      clientReferenceId,
+      startedAt: new Date().toISOString(),
+    }));
+    showToast("Opening payment page...");
     window.setTimeout(() => {
-      window.location.href = "./account.html";
-    }, 500);
+      window.location.href = paymentPages[plan] || "./payment.html";
+    }, 350);
   } catch (error) {
-    showToast(error.message || "Could not create profile.");
+    showToast(error.message || "Could not prepare payment.");
   } finally {
     button.disabled = false;
   }
+});
+
+createPlanOptions.addEventListener("click", (event) => {
+  const input = event.target.closest(".plan-option")?.querySelector('input[name="plan-card"]');
+  if (!input) return;
+  input.checked = true;
+  createProfileForm.elements.plan.value = input.value;
+  renderPlanSummary(input.value);
 });
 
 populateNationalitySelects();

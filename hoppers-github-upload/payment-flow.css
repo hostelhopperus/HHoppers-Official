@@ -1,0 +1,39 @@
+.plan-option > span {
+  display: grid;
+  gap: 6px;
+}
+
+.plan-price {
+  color: var(--ink);
+  font-size: 22px;
+  font-weight: 900;
+}
+
+.plan-features {
+  color: var(--muted);
+  display: grid;
+  gap: 4px;
+  line-height: 1.35;
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.plan-features li {
+  padding-left: 2px;
+}
+
+.checkout-fallback {
+  display: grid;
+  margin-top: 16px;
+  max-width: 320px;
+}
+
+.payment-warning {
+  border-color: var(--brick);
+}
+
+stripe-buy-button {
+  display: block;
+  margin-top: 18px;
+  min-height: 48px;
+}

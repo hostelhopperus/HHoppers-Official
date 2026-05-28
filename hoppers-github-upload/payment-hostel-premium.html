@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hostel Premium Payment | Hoppers</title>
+    <link rel="stylesheet" href="./styles.css?v=25" />
+    <link rel="stylesheet" href="./payment-flow.css?v=1" />
+  </head>
+  <body class="signin-page">
+    <header class="site-header">
+      <a class="brand" href="./index.html" aria-label="Hoppers home">
+        <span class="brand-mark" aria-hidden="true">H</span>
+        <span><strong>Hoppers</strong><small>Good stays. Good people. Mud on boots.</small></span>
+      </a>
+      <a class="header-signin" href="./sign-in.html">Sign in</a>
+    </header>
+    <main class="success-page">
+      <section class="success-card payment-card">
+        <p class="eyebrow">Secure payment</p>
+        <h1>Hostel Premium Plan</h1>
+        <div class="plan-summary"><strong>$199/month</strong><span>Pay securely with Stripe. Hoppers creates the account only after Stripe returns you to the success page.</span></div>
+        <script async src="https://js.stripe.com/v3/buy-button.js"></script>
+        <stripe-buy-button
+          buy-button-id="buy_btn_1TbvTNJwdwooinLhTKZOP7Wu"
+          publishable-key="pk_live_51TVgWuJwdwooinLhfT0YncxqKT8PBvQCaAsaXiVC2wClgjPbBaNthOCeip0zSivSyKyZqMd56XOgQx182rtZSkk6001KuNwgmU"
+        ></stripe-buy-button>
+        <div class="checkout-fallback">
+          <a class="button button-dark" href="https://buy.stripe.com/dRm6oI0d90NL3Nj5aQ4c804?locale=en">
+            Continue to payment
+          </a>
+        </div>
+        <div class="hero-actions"><a class="button button-light" href="./sign-in.html">Back to signup</a></div>
+      </section>
+    </main>
+    <script src="./payment-guard.js?v=1"></script>
+  </body>
+</html>

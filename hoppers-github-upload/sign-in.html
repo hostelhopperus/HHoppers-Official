@@ -10,6 +10,7 @@
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./assets/icon.svg" />
     <link rel="stylesheet" href="./styles.css?v=25" />
+    <link rel="stylesheet" href="./payment-flow.css?v=1" />
   </head>
   <body class="signin-page">
     <header class="site-header">
@@ -90,10 +91,6 @@
                 <input name="password" required minlength="8" type="password" autocomplete="new-password" placeholder="8+ characters" />
               </label>
               <label>
-                <span>Location</span>
-                <input name="location" placeholder="City / country" />
-              </label>
-              <label>
                 <span>Profile photo</span>
                 <input name="photo" accept="image/*" type="file" />
               </label>
@@ -105,14 +102,16 @@
                 <span>Website</span>
                 <input name="website" placeholder="https://yourhostel.com" />
               </label>
-              <label>
-                <span>Plan</span>
-                <select name="plan">
-                  <option value="worker-basic">Worker Basic</option>
-                  <option value="worker-premium">Worker Premium</option>
-                  <option value="hostel-partner">Hostel Partner</option>
-                </select>
-              </label>
+              <input name="plan" type="hidden" value="worker-basic" />
+              <fieldset class="field-group billing-group">
+                <legend>Choose your plan</legend>
+                <div id="create-plan-options" class="plan-grid"></div>
+                <div id="plan-summary" class="plan-summary" aria-live="polite"></div>
+                <p class="payment-note">
+                  Continue to the secure payment page. Your account is only created after Stripe sends you back with a
+                  completed payment.
+                </p>
+              </fieldset>
               <fieldset class="field-group">
                 <legend id="create-tags-legend">Skills</legend>
                 <div class="checkbox-grid">
@@ -134,7 +133,7 @@
               </label>
               <textarea name="bio" placeholder="Short bio, experience, languages, role details, housing notes, or work preferences"></textarea>
             </div>
-            <button class="button button-dark" type="submit">Create profile</button>
+            <button class="button button-dark" type="submit">Continue</button>
           </form>
         </div>
       </section>
@@ -148,7 +147,7 @@
     </footer>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="./sign-in.js?v=4"></script>
+    <script src="./sign-in.js?v=6"></script>
     <script src="./site.js?v=1"></script>
     <script src="./app.js?v=1"></script>
   </body>
