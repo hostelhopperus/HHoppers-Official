@@ -1,3 +1,4 @@
+
 <!doctype html>
 <html lang="en">
   <head>
@@ -5,6 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Payment Received | Hoppers</title>
     <link rel="stylesheet" href="./styles.css?v=25" />
+    <link rel="stylesheet" href="./payment-flow.css?v=1" />
   </head>
   <body>
     <header class="site-header">
@@ -34,17 +36,20 @@
     <main class="success-page">
       <section class="success-card">
         <p class="eyebrow">Payment received</p>
-        <h1>Your profile is ready for review.</h1>
+        <h1>Finishing your Hoppers account.</h1>
         <p>
-          The signup payment has been completed through Stripe. Hoppers will review the profile before activating
-          any monthly plan.
+          Stripe sent you back to Hoppers. We are creating the profile tied to this payment now.
         </p>
+        <div id="payment-status" class="plan-summary" role="status" aria-live="polite">
+          Checking payment return...
+        </div>
         <div class="hero-actions">
-          <a class="button button-dark" href="./profiles.html">Back to profiles</a>
-          <a class="button button-light" href="/admin.html">Open admin</a>
+          <a class="button button-dark" href="./account.html">Open account</a>
+          <a class="button button-light" href="./sign-in.html">Back to sign in</a>
         </div>
       </section>
     </main>
+    <script src="./payment-success.js?v=1"></script>
     <script src="./site.js?v=1"></script>
   </body>
 </html>
