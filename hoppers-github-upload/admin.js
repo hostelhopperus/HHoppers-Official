@@ -528,8 +528,3 @@ logoutButton.addEventListener("click", async () => {
   adminCode.value = "";
 });
 
-fetchJson("/api/admin/session")
-  .then(({ authenticated }) => {
-    if (authenticated) openDashboard();
-  })
-  .catch(() => {});
