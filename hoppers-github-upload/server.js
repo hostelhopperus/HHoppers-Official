@@ -20,21 +20,33 @@ const rateBuckets = new Map();
 
 const PLAN_DETAILS = {
   "worker-basic": {
-    label: "Worker Basic",
-    signupFee: 10,
-    monthlyFee: 5,
+    label: "Worker Basic Plan",
+    signupFee: 2.99,
+    monthlyFee: 2.99,
     stripePriceId: process.env.STRIPE_WORKER_BASIC_PRICE_ID,
   },
   "worker-premium": {
-    label: "Worker Premium",
-    signupFee: 10,
-    monthlyFee: 10,
+    label: "Worker Premium Plan",
+    signupFee: 5.99,
+    monthlyFee: 5.99,
     stripePriceId: process.env.STRIPE_WORKER_PREMIUM_PRICE_ID,
   },
+  "hostel-basic": {
+    label: "Hostel Basic Plan",
+    signupFee: 99,
+    monthlyFee: 99,
+    stripePriceId: process.env.STRIPE_HOSTEL_BASIC_PRICE_ID,
+  },
+  "hostel-premium": {
+    label: "Hostel Premium Plan",
+    signupFee: 199,
+    monthlyFee: 199,
+    stripePriceId: process.env.STRIPE_HOSTEL_PREMIUM_PRICE_ID,
+  },
   "hostel-partner": {
-    label: "Hostel Partner",
-    signupFee: 100,
-    monthlyFee: 75,
+    label: "Hostel Basic Plan",
+    signupFee: 99,
+    monthlyFee: 99,
     stripePriceId: process.env.STRIPE_HOSTEL_PARTNER_PRICE_ID,
   },
 };
@@ -198,18 +210,23 @@ function normalizeList(value) {
 }
 
 function defaultAccountPlan(type) {
-  return type === "hostel" ? "hostel-partner" : "worker-basic";
+  return type === "hostel" ? "hostel-basic" : "worker-basic";
 }
 
 function planDetails(plan, type) {
-  return PLAN_DETAILS[plan] || PLAN_DETAILS[type === "hostel" ? "hostel-partner" : "worker-basic"];
+  return PLAN_DETAILS[plan] || PLAN_DETAILS[defaultAccountPlan(type)];
+}
+
+function normalizedPlan(plan, type) {
+  return PLAN_DETAILS[plan] ? plan : defaultAccountPlan(type);
 }
 
 function buildPaymentRecord(type, plan) {
-  const details = planDetails(plan, type);
+  const normalized = normalizedPlan(plan, type);
+  const details = planDetails(normalized, type);
   return {
     provider: process.env.STRIPE_SECRET_KEY ? "stripe" : "pre-stripe",
-    plan,
+    plan: normalized,
     planLabel: details.label,
     signupFee: details.signupFee,
     monthlyFee: details.monthlyFee,
@@ -221,15 +238,20 @@ function buildPaymentRecord(type, plan) {
   };
 }
 
-function buildAccountBilling(type, plan) {
-  const details = planDetails(plan, type);
+function buildAccountBilling(type, plan, incoming = {}) {
+  const normalized = normalizedPlan(plan || incoming.plan, type);
+  const details = planDetails(normalized, type);
+  const paid = String(incoming.status || "").toLowerCase() === "paid";
   return {
-    provider: process.env.STRIPE_SECRET_KEY ? "stripe" : "pre-stripe",
-    plan,
+    provider: paid ? "stripe" : process.env.STRIPE_SECRET_KEY ? "stripe" : "pre-stripe",
+    plan: normalized,
     planLabel: details.label,
     signupFee: details.signupFee,
     monthlyFee: details.monthlyFee,
-    status: "billing_setup_after_approval",
+    status: paid ? "paid" : "billing_setup_after_approval",
+    paidAt: paid ? String(incoming.paidAt || new Date().toISOString()) : incoming.paidAt || null,
+    stripeCheckoutSessionId: incoming.stripeCheckoutSessionId || null,
+    stripeSubscriptionId: incoming.stripeSubscriptionId || null,
   };
 }
 
@@ -843,6 +865,7 @@ async function handleApi(req, res, pathname) {
     const email = normalizeEmail(body.email);
     const password = String(body.password || "");
     const profile = sanitizeAccountProfile(body.profile || body, type);
+    const billing = buildAccountBilling(type, profile.plan || body.billing?.plan || defaultAccountPlan(type), body.billing || {});
     if (!email || !email.includes("@")) {
       json(res, 400, { error: "Enter a valid email address." });
       return true;
@@ -869,7 +892,7 @@ async function handleApi(req, res, pathname) {
       createdAt: now,
       updatedAt: now,
       profile,
-      billing: buildAccountBilling(type, profile.plan || defaultAccountPlan(type)),
+      billing,
     });
     const token = createSignedToken({ purpose: "account", accountId: account.id });
     accountSessions.set(token, account.id);
@@ -935,7 +958,7 @@ async function handleApi(req, res, pathname) {
         ...current,
         updatedAt: new Date().toISOString(),
         profile,
-        billing: buildAccountBilling(current.type, profile.plan || defaultAccountPlan(current.type)),
+        billing: buildAccountBilling(current.type, profile.plan || defaultAccountPlan(current.type), current.billing || {}),
       };
     });
     json(res, 200, await accountPayload(updated));
@@ -1052,7 +1075,9 @@ async function handleApi(req, res, pathname) {
         billing: {
           ...billing,
           status:
-            status === "approved"
+            billing.status === "paid"
+              ? "paid"
+              : status === "approved"
               ? "approval_complete_billing_pending"
               : status === "rejected"
                 ? "not_started"
