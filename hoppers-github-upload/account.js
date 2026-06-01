@@ -997,6 +997,7 @@ function billingLabel(value) {
   if (value === "paid") return "Active";
   if (value === "canceling") return "Canceling";
   if (value === "canceled") return "Canceled";
+  if (value === "deleted") return "Deleted";
   return statusLabel(value || "not_connected");
 }
 
@@ -1021,16 +1022,16 @@ function renderMembership(account) {
     : "Not available yet";
   document.querySelector("#membership-note").textContent =
     status === "canceling"
-      ? "Your Stripe subscription is scheduled to cancel at the end of the paid period."
+      ? "Your Hoppers account is closed and your Stripe subscription is scheduled to cancel at the end of the paid period."
       : status === "canceled"
-        ? "This membership is canceled. Automatic recurring payments should be stopped in Stripe."
-        : "Cancellations are sent to Stripe, so automatic recurring payments stop through the real subscription.";
+        ? "This Hoppers account is closed. Automatic recurring payments should be stopped in Stripe."
+        : "Deleting your account sends the cancellation to Stripe first so future recurring payments stop.";
   if (manageBillingButton) {
     manageBillingButton.disabled = !hasCustomer;
     manageBillingButton.title = hasCustomer ? "" : "Stripe customer details are not connected yet.";
   }
   if (cancelMembershipButton) {
-    cancelMembershipButton.textContent = "Cancel subscription";
+    cancelMembershipButton.textContent = "Delete account";
     cancelMembershipButton.disabled = (!hasSubscription && !hasCustomer) || status === "canceling" || status === "canceled";
     cancelMembershipButton.title = hasSubscription
       ? ""
@@ -1197,17 +1198,19 @@ manageBillingButton?.addEventListener("click", async () => {
 });
 
 cancelMembershipButton?.addEventListener("click", async () => {
-  if (!confirm("Cancel this Hoppers subscription and stop future recurring Stripe payments?")) return;
+  if (!confirm("Delete this Hoppers account and cancel future recurring Stripe payments? This closes dashboard access.")) return;
   cancelMembershipButton.disabled = true;
   try {
-    const payload = await fetchJson("/api/account/cancel-membership", {
+    await fetchJson("/api/account/delete-account", {
       method: "POST",
       body: JSON.stringify({ confirm: true }),
     });
-    showDashboard(payload);
-    showToast("Subscription cancellation sent to Stripe.");
+    showToast("Account deleted and Stripe cancellation sent.");
+    window.setTimeout(() => {
+      window.location.href = "./sign-in.html?account=deleted";
+    }, 700);
   } catch (error) {
-    showToast(error.message || "Could not cancel subscription.");
+    showToast(error.message || "Could not delete account.");
   } finally {
     cancelMembershipButton.disabled = false;
   }

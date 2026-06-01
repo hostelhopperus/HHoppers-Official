@@ -381,6 +381,10 @@ function publicAccount(account) {
   };
 }
 
+function isDeletedAccount(account) {
+  return account?.status === "deleted" || Boolean(account?.profile?.deletedAt);
+}
+
 function toDbPasswordReset(reset) {
   return {
     id: reset.id,
@@ -821,7 +825,8 @@ async function accountFromRequest(req) {
   const token = parseCookies(req)[ACCOUNT_COOKIE];
   const signed = readSignedToken(token);
   const accountId = signed?.purpose === "account" ? signed.accountId : token ? accountSessions.get(token) : null;
-  return accountId ? findAccountById(accountId) : null;
+  const account = accountId ? await findAccountById(accountId) : null;
+  return isDeletedAccount(account) ? null : account;
 }
 
 async function addEmailOutbox(item) {
@@ -1388,6 +1393,10 @@ async function handleApi(req, res, pathname) {
       json(res, 401, { error: "Email or password did not match." });
       return true;
     }
+    if (isDeletedAccount(account)) {
+      json(res, 403, { error: "This Hoppers account has been deleted. Contact Hoppers support if this was a mistake." });
+      return true;
+    }
     const token = createSignedToken({ purpose: "account", accountId: account.id });
     accountSessions.set(token, account.id);
     json(
@@ -1459,7 +1468,7 @@ async function handleApi(req, res, pathname) {
     return true;
   }
 
-  if (pathname === "/api/account/cancel-membership" && req.method === "POST") {
+  if ((pathname === "/api/account/delete-account" || pathname === "/api/account/cancel-membership") && req.method === "POST") {
     const account = await accountFromRequest(req);
     if (!account) {
       json(res, 401, { error: "Account login required." });
@@ -1467,45 +1476,67 @@ async function handleApi(req, res, pathname) {
     }
     const body = await readBody(req);
     if (body.confirm !== true) {
-      json(res, 400, { error: "Confirm cancellation before canceling membership." });
+      json(res, 400, { error: "Confirm account deletion before closing this account." });
       return true;
     }
     try {
+      const hasStripeBilling = Boolean(account.billing?.stripeCustomerId || account.billing?.stripeSubscriptionId);
       const matchedSubscription = await findStripeSubscriptionForAccount(account);
       const subscriptionId = matchedSubscription?.id;
-      if (!subscriptionId) {
-        json(res, 409, { error: "This account does not have an active Stripe subscription connected yet." });
+      if (hasStripeBilling && !subscriptionId) {
+        json(res, 409, { error: "Hoppers could not find the active Stripe subscription. Open Manage subscription in Stripe or contact support before deleting the account." });
         return true;
       }
-      const subscription = await stripeRequest(`subscriptions/${encodeURIComponent(subscriptionId)}`, {
-        cancel_at_period_end: "true",
-      });
+      const subscription = subscriptionId
+        ? await stripeRequest(`subscriptions/${encodeURIComponent(subscriptionId)}`, {
+            cancel_at_period_end: "true",
+          })
+        : null;
+      const closedAt = new Date().toISOString();
       const updated = await replaceAccount(account.id, (current) => ({
         ...current,
-        updatedAt: new Date().toISOString(),
+        status: "deleted",
+        updatedAt: closedAt,
+        profile: {
+          ...(current.profile || {}),
+          deletedAt: closedAt,
+        },
         billing: buildAccountBilling(current.type, current.billing?.plan || current.profile?.plan || defaultAccountPlan(current.type), {
           ...(current.billing || {}),
-          provider: "stripe",
-          status: "canceling",
-          stripeSubscriptionId: subscription.id || subscriptionId,
-          subscriptionStatus: subscription.status || current.billing?.subscriptionStatus || null,
-          cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
-          canceledAt: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : current.billing?.canceledAt || null,
-          currentPeriodEnd: subscription.current_period_end
+          provider: subscriptionId ? "stripe" : current.billing?.provider || "none",
+          status: subscriptionId ? "canceling" : "canceled",
+          stripeSubscriptionId: subscription?.id || subscriptionId || current.billing?.stripeSubscriptionId || null,
+          subscriptionStatus: subscription?.status || current.billing?.subscriptionStatus || null,
+          cancelAtPeriodEnd: subscription ? Boolean(subscription.cancel_at_period_end) : current.billing?.cancelAtPeriodEnd || false,
+          canceledAt: subscription?.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : current.billing?.canceledAt || closedAt,
+          currentPeriodEnd: subscription?.current_period_end
             ? new Date(subscription.current_period_end * 1000).toISOString()
             : current.billing?.currentPeriodEnd || null,
         }),
       }));
-      json(res, 200, {
-        ...(await accountPayload(updated)),
-        cancellation: {
-          status: subscription.status,
-          cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
-          currentPeriodEnd: updated.billing?.currentPeriodEnd || null,
+      const token = parseCookies(req)[ACCOUNT_COOKIE];
+      if (token) accountSessions.delete(token);
+      json(
+        res,
+        200,
+        {
+          authenticated: false,
+          deleted: true,
+          accountId: updated.id,
+          cancellation: subscription
+            ? {
+                status: subscription.status,
+                cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
+                currentPeriodEnd: updated.billing?.currentPeriodEnd || null,
+              }
+            : null,
         },
-      });
+        {
+          "set-cookie": `${ACCOUNT_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`,
+        }
+      );
     } catch (error) {
-      json(res, 502, { error: error.message || "Could not cancel Stripe subscription." });
+      json(res, 502, { error: error.message || "Could not delete account or cancel Stripe subscription." });
     }
     return true;
   }
