@@ -1079,8 +1079,28 @@ async function findStripeSubscriptionForAccount(account) {
   );
 }
 
+async function retrieveStripeSubscription(subscriptionId) {
+  const id = String(subscriptionId || "").trim();
+  if (!id || !id.startsWith("sub_")) return null;
+  return stripeRequest(
+    `subscriptions/${encodeURIComponent(id)}`,
+    { "expand[]": "items.data.price" },
+    { method: "GET" }
+  );
+}
+
 function checkoutSessionEmail(session) {
   return normalizeEmail(session?.customer_details?.email || session?.customer_email || "");
+}
+
+function checkoutSessionPaid(session) {
+  return session?.payment_status === "paid" || session?.status === "complete";
+}
+
+function checkoutSessionMatchesPlan(session, plan) {
+  const expectedPaymentLink = STRIPE_PAYMENT_LINK_IDS[plan];
+  const paymentLinkId = stripeObjectId(session?.payment_link);
+  return !expectedPaymentLink || paymentLinkId === expectedPaymentLink;
 }
 
 function accountPlan(account) {
@@ -1113,6 +1133,66 @@ async function findAccountForCheckoutSession(session, incomingReference = "") {
   }
 
   return null;
+}
+
+async function findPaidCheckoutSessionForRecovery(email, plan) {
+  const targetEmail = normalizeEmail(email);
+  if (!targetEmail) return null;
+  const createdAfter = Math.floor((Date.now() - 180 * 24 * 60 * 60 * 1000) / 1000);
+  let startingAfter = "";
+  for (let page = 0; page < 5; page += 1) {
+    const query = {
+      limit: "100",
+      "created[gte]": String(createdAfter),
+      "expand[]": "data.subscription",
+    };
+    if (startingAfter) query.starting_after = startingAfter;
+    const result = await stripeRequest("checkout/sessions", query, { method: "GET" });
+    const sessions = Array.isArray(result?.data) ? result.data : [];
+    const match = sessions.find(
+      (session) =>
+        checkoutSessionPaid(session) &&
+        checkoutSessionEmail(session) === targetEmail &&
+        checkoutSessionMatchesPlan(session, plan)
+    );
+    if (match) return match;
+    if (!result?.has_more || !sessions.length) break;
+    startingAfter = sessions.at(-1).id;
+  }
+  return null;
+}
+
+async function recoveredStripeBilling(type, email, plan, session) {
+  if (!session || !checkoutSessionPaid(session)) {
+    throw new Error("Stripe has not confirmed a paid checkout for this account.");
+  }
+  const normalized = normalizedPlan(plan, type);
+  const paidEmail = checkoutSessionEmail(session);
+  if (paidEmail !== normalizeEmail(email)) {
+    throw new Error("Stripe payment email did not match the account email.");
+  }
+  if (!checkoutSessionMatchesPlan(session, normalized)) {
+    throw new Error("Stripe payment did not match the selected Hoppers plan.");
+  }
+  let subscription = session.subscription && typeof session.subscription === "object" ? session.subscription : null;
+  if (!subscription && stripeObjectId(session.subscription)) {
+    subscription = await retrieveStripeSubscription(stripeObjectId(session.subscription));
+  }
+  if (subscription && ["canceled", "incomplete_expired"].includes(subscription.status)) {
+    throw new Error("The matching Stripe subscription is no longer active.");
+  }
+  return buildAccountBilling(type, normalized, {
+    provider: "stripe",
+    status: "paid",
+    paidAt: session.created ? new Date(session.created * 1000).toISOString() : new Date().toISOString(),
+    stripeCustomerId: stripeObjectId(session.customer),
+    stripeCheckoutSessionId: session.id,
+    stripeSubscriptionId: stripeObjectId(session.subscription),
+    stripePaymentLinkId: stripeObjectId(session.payment_link),
+    subscriptionStatus: subscription?.status || null,
+    cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end),
+    currentPeriodEnd: stripePeriodEnd(subscription),
+  });
 }
 
 async function verifiedStripeBilling(type, email, plan, incoming = {}) {
@@ -1946,6 +2026,107 @@ async function handleApi(req, res, pathname) {
       return true;
     }
     json(res, 200, { stats: await adminStats() });
+    return true;
+  }
+
+  if (pathname === "/api/admin/accounts/recover-paid" && req.method === "POST") {
+    if (!isAdmin(req)) {
+      json(res, 401, { error: "Admin login required" });
+      return true;
+    }
+    if (!permanentAccountStorageReady()) {
+      json(res, 503, { error: "Permanent account storage is not connected yet. Add Supabase before recovering paid accounts." });
+      return true;
+    }
+    if (!rateLimit(req, "admin-recover-paid-account", 12, 60 * 60 * 1000)) {
+      json(res, 429, { error: "Too many recovery attempts. Try again later." });
+      return true;
+    }
+    const body = await readBody(req);
+    const type = body.type === "hostel" ? "hostel" : "worker";
+    const email = normalizeEmail(body.email);
+    const password = String(body.password || "");
+    const plan = normalizedPlan(body.plan || defaultAccountPlan(type), type);
+    const profile = sanitizeAccountProfile(
+      {
+        ...(body.profile || {}),
+        name: body.name || body.profile?.name,
+        plan,
+      },
+      type
+    );
+
+    if (!email || !email.includes("@")) {
+      json(res, 400, { error: "Enter the Stripe receipt email." });
+      return true;
+    }
+    if (password.length < 8) {
+      json(res, 400, { error: "Temporary password must be at least 8 characters." });
+      return true;
+    }
+    if (!profile.name) {
+      json(res, 400, { error: "Enter a profile name for the recovered account." });
+      return true;
+    }
+
+    const existing = await findAccountByEmail(email);
+    if (existing && !isPaymentPendingAccount(existing)) {
+      json(res, 409, { error: "A Hoppers account already exists for that email. Use the admin password reset button instead." });
+      return true;
+    }
+
+    let session;
+    let billing;
+    try {
+      const sessionId = String(body.stripeCheckoutSessionId || body.checkoutSessionId || body.sessionId || "").trim();
+      session = sessionId ? await retrieveStripeCheckoutSession(sessionId) : await findPaidCheckoutSessionForRecovery(email, plan);
+      if (!session) {
+        json(res, 404, { error: "No paid Stripe checkout was found for that email and plan. Check the receipt email and plan, or use the Stripe session ID if you have it." });
+        return true;
+      }
+      billing = await recoveredStripeBilling(type, email, plan, session);
+    } catch (error) {
+      json(res, 502, { error: error.message || "Could not verify the Stripe payment." });
+      return true;
+    }
+
+    const now = new Date().toISOString();
+    const accountData = {
+      type,
+      email,
+      ...hashPassword(password),
+      status: "profile_draft",
+      updatedAt: now,
+      profile,
+      billing,
+    };
+    const account = existing
+      ? await replaceAccount(existing.id, (current) => ({ ...current, ...accountData, createdAt: current.createdAt || now }))
+      : await saveAccount({ id: crypto.randomUUID(), createdAt: now, ...accountData });
+
+    await logAdminAction({
+      action: "paid_account_recovered",
+      accountId: account.id,
+      targetEmail: account.email,
+      metadata: {
+        accountType: type,
+        plan,
+        stripeCheckoutSessionId: session.id,
+        stripeCustomerId: stripeObjectId(session.customer),
+        stripeSubscriptionId: stripeObjectId(session.subscription),
+      },
+    });
+
+    json(res, existing ? 200 : 201, {
+      ok: true,
+      account: publicAccount(account),
+      recoveredFromStripe: {
+        checkoutSessionId: session.id,
+        customerId: stripeObjectId(session.customer),
+        subscriptionId: stripeObjectId(session.subscription),
+      },
+      message: "Recovered account created. The member can now sign in with the temporary password you set.",
+    });
     return true;
   }
 
