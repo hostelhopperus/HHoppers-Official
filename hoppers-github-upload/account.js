@@ -803,6 +803,28 @@ function communicationThreads() {
   }
 }
 
+function clearLocalDeletedAccountData(account) {
+  const email = String(account?.email || "").toLowerCase();
+  const accountId = String(account?.id || "");
+  const profileName = String(account?.profile?.name || "").toLowerCase();
+  try {
+    localStorage.removeItem("hoppersPendingAccount");
+    if (accountId) localStorage.removeItem(`hoppers_saved_openings_${accountId}`);
+    if (email) localStorage.removeItem(`hoppers_saved_openings_${email}`);
+    const nextThreads = communicationThreads().filter((thread) => {
+      const workerEmail = String(thread.worker?.email || "").toLowerCase();
+      const workerId = String(thread.worker?.accountId || "");
+      const openingName = String(thread.opening?.name || "").toLowerCase();
+      if (account?.type === "worker") return workerEmail !== email && workerId !== accountId;
+      if (account?.type === "hostel") return !profileName || openingName !== profileName;
+      return true;
+    });
+    localStorage.setItem("hoppers_communications", JSON.stringify(nextThreads));
+  } catch {
+    // Browser storage cleanup is best-effort after the server deletion succeeds.
+  }
+}
+
 function workerThreads(account) {
   const email = String(account.email || "").toLowerCase();
   return communicationThreads().filter((thread) => String(thread.worker?.email || "").toLowerCase() === email);
@@ -1025,7 +1047,7 @@ function renderMembership(account) {
       ? "Your Hoppers account is closed and your Stripe subscription is scheduled to cancel at the end of the paid period."
       : status === "canceled"
         ? "This Hoppers account is closed. Automatic recurring payments should be stopped in Stripe."
-        : "Deleting your account sends the cancellation to Stripe first so future recurring payments stop.";
+        : "Deleting your account removes your Hoppers profile data and sends the cancellation to Stripe first so future recurring payments stop.";
   if (manageBillingButton) {
     manageBillingButton.disabled = !hasCustomer;
     manageBillingButton.title = hasCustomer ? "" : "Stripe customer details are not connected yet.";
@@ -1198,14 +1220,16 @@ manageBillingButton?.addEventListener("click", async () => {
 });
 
 cancelMembershipButton?.addEventListener("click", async () => {
-  if (!confirm("Delete this Hoppers account and cancel future recurring Stripe payments? This closes dashboard access.")) return;
+  if (!confirm("Permanently delete this Hoppers account, remove its profile data, and cancel future recurring Stripe payments? This cannot be undone.")) return;
   cancelMembershipButton.disabled = true;
   try {
+    const deletingAccount = currentAccount;
     await fetchJson("/api/account/delete-account", {
       method: "POST",
       body: JSON.stringify({ confirm: true }),
     });
-    showToast("Account deleted and Stripe cancellation sent.");
+    clearLocalDeletedAccountData(deletingAccount);
+    showToast("Account data deleted and Stripe cancellation sent.");
     window.setTimeout(() => {
       window.location.href = "./sign-in.html?account=deleted";
     }, 700);

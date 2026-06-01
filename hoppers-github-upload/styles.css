@@ -2341,7 +2341,7 @@ textarea:focus {
 .admin-stats {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   margin: 0 auto 18px;
   max-width: 1180px;
 }

@@ -424,6 +424,17 @@ function toDbAdminAction(action) {
   };
 }
 
+function fromDbAdminAction(row) {
+  return {
+    id: row.id,
+    action: row.action,
+    accountId: row.account_id,
+    targetEmail: row.target_email,
+    metadata: row.metadata || {},
+    createdAt: row.created_at,
+  };
+}
+
 function sanitizeSubmission(input) {
   const type = input.type === "hostel" ? "hostel" : "worker";
   const data = input.data && typeof input.data === "object" ? input.data : {};
@@ -748,6 +759,119 @@ async function logAdminAction({ action, accountId = null, targetEmail = "", meta
   actions.unshift(item);
   await writeJson(ADMIN_ACTIONS_FILE, actions.slice(0, 1000));
   return item;
+}
+
+async function listAdminActions() {
+  if (useSupabase()) {
+    try {
+      const rows = await supabaseRequest("admin_actions?select=*&order=created_at.desc");
+      return rows.map(fromDbAdminAction);
+    } catch (error) {
+      console.warn(`Admin action read fallback: ${error.message}`);
+    }
+  }
+  return readJson(ADMIN_ACTIONS_FILE, []);
+}
+
+async function adminStats() {
+  const actions = await listAdminActions();
+  const deleted = actions.filter((action) => action.action === "account_deleted");
+  return {
+    deletedAccounts: deleted.length,
+    deletedWorkers: deleted.filter((action) => action.metadata?.accountType === "worker").length,
+    deletedHostels: deleted.filter((action) => action.metadata?.accountType === "hostel").length,
+  };
+}
+
+function submissionBelongsToAccount(submission, account) {
+  const email = normalizeEmail(account.email);
+  const data = submission.data || {};
+  return (
+    normalizeEmail(data.email) === email ||
+    String(data.accountId || data.workerAccountId || data.hostelAccountId || "") === String(account.id || "")
+  );
+}
+
+async function deleteAccountData(account) {
+  const email = normalizeEmail(account.email);
+  const accountId = String(account.id || "");
+  const submissions = await listSubmissions();
+  const submissionIds = submissions.filter((submission) => submissionBelongsToAccount(submission, account)).map((submission) => submission.id);
+
+  if (useSupabase()) {
+    for (const submissionId of submissionIds) {
+      await supabaseRequest(`submissions?id=eq.${encodeURIComponent(submissionId)}`, { method: "DELETE" });
+    }
+    await supabaseRequest(`password_resets?account_id=eq.${encodeURIComponent(accountId)}`, { method: "DELETE" });
+    if (email) await supabaseRequest(`password_resets?email=eq.${encodeURIComponent(email)}`, { method: "DELETE" });
+    if (email) await supabaseRequest(`email_outbox?to_email=eq.${encodeURIComponent(email)}`, { method: "DELETE" });
+    await supabaseRequest(`admin_actions?account_id=eq.${encodeURIComponent(accountId)}`, { method: "DELETE" });
+    if (email) await supabaseRequest(`admin_actions?target_email=eq.${encodeURIComponent(email)}`, { method: "DELETE" });
+    await supabaseRequest(`accounts?id=eq.${encodeURIComponent(accountId)}`, { method: "DELETE" });
+    return { submissionsDeleted: submissionIds.length };
+  }
+
+  const accounts = await readJson(ACCOUNTS_FILE, []);
+  await writeJson(
+    ACCOUNTS_FILE,
+    accounts.filter((item) => item.id !== accountId)
+  );
+
+  await writeJson(
+    SUBMISSIONS_FILE,
+    submissions.filter((submission) => !submissionIds.includes(submission.id))
+  );
+
+  const resets = await readJson(PASSWORD_RESETS_FILE, []);
+  await writeJson(
+    PASSWORD_RESETS_FILE,
+    resets.filter((reset) => reset.accountId !== accountId && normalizeEmail(reset.email) !== email)
+  );
+
+  const outbox = await readJson(EMAIL_OUTBOX_FILE, []);
+  await writeJson(
+    EMAIL_OUTBOX_FILE,
+    outbox.filter((item) => normalizeEmail(item.to) !== email)
+  );
+
+  const actions = await readJson(ADMIN_ACTIONS_FILE, []);
+  await writeJson(
+    ADMIN_ACTIONS_FILE,
+    actions.filter((action) => action.accountId !== accountId && normalizeEmail(action.targetEmail) !== email)
+  );
+
+  return { submissionsDeleted: submissionIds.length };
+}
+
+async function recordAccountDeletion(account, deletion, subscription) {
+  await logAdminAction({
+    action: "account_deleted",
+    accountId: null,
+    targetEmail: "",
+    metadata: {
+      accountType: account.type,
+      plan: account.billing?.plan || account.profile?.plan || defaultAccountPlan(account.type),
+      stripeCancellation: subscription
+        ? {
+            status: subscription.status,
+            cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
+            currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+          }
+        : null,
+      removed: deletion,
+    },
+  });
+
+  const notifyEmail = normalizeEmail(process.env.ADMIN_NOTIFY_EMAIL);
+  if (!notifyEmail) return;
+  await addEmailOutbox({
+    id: crypto.randomUUID(),
+    to: notifyEmail,
+    subject: "Hoppers account deleted",
+    body: `A ${account.type} account deleted their Hoppers account. Stripe cancellation was ${subscription ? "sent" : "not needed"}.`,
+    status: "queued",
+    createdAt: new Date().toISOString(),
+  });
 }
 
 async function saveSubmission(submission) {
@@ -1492,28 +1616,8 @@ async function handleApi(req, res, pathname) {
             cancel_at_period_end: "true",
           })
         : null;
-      const closedAt = new Date().toISOString();
-      const updated = await replaceAccount(account.id, (current) => ({
-        ...current,
-        status: "deleted",
-        updatedAt: closedAt,
-        profile: {
-          ...(current.profile || {}),
-          deletedAt: closedAt,
-        },
-        billing: buildAccountBilling(current.type, current.billing?.plan || current.profile?.plan || defaultAccountPlan(current.type), {
-          ...(current.billing || {}),
-          provider: subscriptionId ? "stripe" : current.billing?.provider || "none",
-          status: subscriptionId ? "canceling" : "canceled",
-          stripeSubscriptionId: subscription?.id || subscriptionId || current.billing?.stripeSubscriptionId || null,
-          subscriptionStatus: subscription?.status || current.billing?.subscriptionStatus || null,
-          cancelAtPeriodEnd: subscription ? Boolean(subscription.cancel_at_period_end) : current.billing?.cancelAtPeriodEnd || false,
-          canceledAt: subscription?.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : current.billing?.canceledAt || closedAt,
-          currentPeriodEnd: subscription?.current_period_end
-            ? new Date(subscription.current_period_end * 1000).toISOString()
-            : current.billing?.currentPeriodEnd || null,
-        }),
-      }));
+      const deletion = await deleteAccountData(account);
+      await recordAccountDeletion(account, deletion, subscription);
       const token = parseCookies(req)[ACCOUNT_COOKIE];
       if (token) accountSessions.delete(token);
       json(
@@ -1522,12 +1626,13 @@ async function handleApi(req, res, pathname) {
         {
           authenticated: false,
           deleted: true,
-          accountId: updated.id,
+          accountId: null,
+          removed: deletion,
           cancellation: subscription
             ? {
                 status: subscription.status,
                 cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
-                currentPeriodEnd: updated.billing?.currentPeriodEnd || null,
+                currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
               }
             : null,
         },
@@ -1627,6 +1732,15 @@ async function handleApi(req, res, pathname) {
     }
     const accounts = await listAccounts();
     json(res, 200, { accounts: accounts.map(publicAccount) });
+    return true;
+  }
+
+  if (pathname === "/api/admin/stats" && req.method === "GET") {
+    if (!isAdmin(req)) {
+      json(res, 401, { error: "Admin login required" });
+      return true;
+    }
+    json(res, 200, { stats: await adminStats() });
     return true;
   }
 

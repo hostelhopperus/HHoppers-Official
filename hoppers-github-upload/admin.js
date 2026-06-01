@@ -15,6 +15,8 @@ let activeFilter = "all";
 let activeView = "accounts";
 let cachedAccounts = [];
 let cachedSubmissions = [];
+let cachedAdminStats = { deletedAccounts: 0, deletedWorkers: 0, deletedHostels: 0 };
+let statsRefreshTimer = null;
 
 const paidStatuses = new Set(["paid", "complete", "completed", "succeeded", "active"]);
 const subscribedStatuses = new Set(["active", "approved", "trialing"]);
@@ -259,9 +261,20 @@ function submissionRows(submission) {
 }
 
 async function loadData() {
-  const [{ accounts }, { submissions }] = await Promise.all([fetchJson("/api/admin/accounts"), fetchJson("/api/submissions")]);
+  const [{ accounts }, { submissions }, { stats }] = await Promise.all([
+    fetchJson("/api/admin/accounts"),
+    fetchJson("/api/submissions"),
+    fetchJson("/api/admin/stats"),
+  ]);
   cachedAccounts = accounts;
   cachedSubmissions = submissions;
+  cachedAdminStats = stats || cachedAdminStats;
+}
+
+async function refreshAdminStats() {
+  const { stats } = await fetchJson("/api/admin/stats");
+  cachedAdminStats = stats || cachedAdminStats;
+  updateStats();
 }
 
 function visibleItems(items) {
@@ -274,6 +287,7 @@ function updateStats() {
   document.querySelector("#stat-pending").textContent = items.filter((item) => reviewStatus(item.status) === "pending").length;
   document.querySelector("#stat-approved").textContent = items.filter((item) => reviewStatus(item.status) === "approved").length;
   document.querySelector("#stat-rejected").textContent = items.filter((item) => reviewStatus(item.status) === "rejected").length;
+  document.querySelector("#stat-deleted").textContent = cachedAdminStats.deletedAccounts || 0;
 }
 
 function renderAccounts() {
@@ -405,6 +419,11 @@ async function openDashboard() {
   loginSection.hidden = true;
   dashboard.hidden = false;
   await refreshDashboard();
+  if (!statsRefreshTimer) {
+    statsRefreshTimer = window.setInterval(() => {
+      if (!dashboard.hidden) refreshAdminStats().catch(() => {});
+    }, 5000);
+  }
 }
 
 loginForm.addEventListener("submit", async (event) => {
@@ -569,6 +588,10 @@ clearRejectedButton.addEventListener("click", async () => {
 
 logoutButton.addEventListener("click", async () => {
   await fetchJson("/api/admin/logout", { method: "POST" }).catch(() => {});
+  if (statsRefreshTimer) {
+    window.clearInterval(statsRefreshTimer);
+    statsRefreshTimer = null;
+  }
   dashboard.hidden = true;
   loginSection.hidden = false;
   adminCode.value = "";
