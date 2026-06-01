@@ -2365,6 +2365,71 @@ textarea:focus {
   margin-top: 4px;
 }
 
+.admin-recovery-panel {
+  align-items: start;
+  background: #fffdf7;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 34px rgba(23, 32, 34, 0.06);
+  display: grid;
+  gap: 22px;
+  grid-template-columns: minmax(220px, 0.65fr) minmax(0, 1.35fr);
+  margin: 0 auto 18px;
+  max-width: 1180px;
+  padding: 22px;
+}
+
+.admin-recovery-panel h2 {
+  font-size: 28px;
+  font-weight: 900;
+  margin: 8px 0 0;
+}
+
+.admin-recovery-panel p:not(.eyebrow) {
+  color: var(--muted);
+  line-height: 1.55;
+  margin-top: 10px;
+}
+
+.admin-recovery-form {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-recovery-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.admin-recovery-form label span {
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.admin-recovery-form input,
+.admin-recovery-form select {
+  background: white;
+  border: 1px solid #bfc8c1;
+  border-radius: 6px;
+  min-height: 44px;
+  padding: 10px 11px;
+  width: 100%;
+}
+
+.admin-recovery-form .button {
+  align-self: end;
+  min-height: 44px;
+}
+
+.admin-recovery-form .form-note {
+  color: var(--pine);
+  font-weight: 800;
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
 .admin-toolbar {
   align-items: center;
   display: flex;
@@ -2718,6 +2783,8 @@ textarea:focus {
   }
 
   .admin-hero,
+  .admin-recovery-panel,
+  .admin-recovery-form,
   .account-hero,
   .admin-stats,
   .membership-list,
