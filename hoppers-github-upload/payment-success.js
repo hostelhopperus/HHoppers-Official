@@ -1,3 +1,4 @@
+
 const paymentStatus = document.querySelector("#payment-status");
 
 const planLabels = {
@@ -9,6 +10,14 @@ const planLabels = {
 
 function setPaymentStatus(title, message) {
   paymentStatus.innerHTML = `<strong>${title}</strong><span>${message}</span>`;
+}
+
+function pendingSignup() {
+  try {
+    return JSON.parse(sessionStorage.getItem("hoppersPendingAccount") || "null");
+  } catch {
+    return null;
+  }
 }
 
 async function fetchJson(url, options = {}) {
@@ -37,7 +46,6 @@ async function finishPaidSignup() {
     params.get("stripe_success") === "true";
   const checkoutSessionId = params.get("session_id") || params.get("checkout_session_id") || params.get("session");
 
-  const pending = sessionStorage.getItem("hoppersPendingAccount");
   if (!paymentLooksSuccessful) {
     setPaymentStatus(
       "Payment is not confirmed yet.",
@@ -46,32 +54,21 @@ async function finishPaidSignup() {
     return;
   }
 
-  if (!pending) {
+  if (!checkoutSessionId) {
     setPaymentStatus(
-      "No pending signup found.",
-      "Start again from Create profile. Hoppers only creates the account when the paid signup data is still in this browser tab."
+      "Payment return is missing a Stripe session.",
+      "Do not pay again. The Stripe payment link needs to send Hoppers the checkout session so we can activate the account."
     );
     return;
   }
 
   try {
-    const account = JSON.parse(pending);
-    await fetchJson("/api/account/register", {
+    const pending = pendingSignup();
+    await fetchJson("/api/account/complete-paid-signup", {
       method: "POST",
       body: JSON.stringify({
-        type: account.type,
-        email: account.email,
-        password: account.password,
-        profile: account.profile,
-        billing: {
-          provider: "stripe",
-          status: "paid",
-          plan: account.plan,
-          planLabel: planLabels[account.plan] || account.plan,
-          paidAt: new Date().toISOString(),
-          stripeCheckoutSessionId: checkoutSessionId || "",
-          clientReferenceId: account.clientReferenceId || account.signupId || "",
-        },
+        stripeCheckoutSessionId: checkoutSessionId,
+        clientReferenceId: pending?.clientReferenceId || pending?.signupId || "",
       }),
     });
     sessionStorage.removeItem("hoppersPendingAccount");
