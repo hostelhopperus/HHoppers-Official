@@ -167,6 +167,22 @@ async function fetchJson(url, options = {}) {
   return body;
 }
 
+async function savePendingSignup(signup) {
+  const response = await fetchJson("/api/account/pending-signup", {
+    method: "POST",
+    body: JSON.stringify(signup),
+  });
+  const pending = {
+    ...signup,
+    email: response.account?.email || signup.email,
+    accountId: response.accountId || response.account?.id || "",
+    clientReferenceId: response.clientReferenceId || signup.clientReferenceId,
+    paymentPage: response.paymentPage || paymentPages[signup.plan] || "./sign-in.html",
+  };
+  sessionStorage.setItem("hoppersPendingAccount", JSON.stringify(pending));
+  return pending;
+}
+
 function showToast(message) {
   toast.textContent = message;
   toast.classList.add("visible");
@@ -1160,7 +1176,7 @@ registerForm.addEventListener("submit", async (event) => {
     profile = await attachPhoto(registerForm, profile);
     validateDates(profile);
     const plan = profile.plan || (formData.get("type") === "hostel" ? "hostel-basic" : "worker-basic");
-    sessionStorage.setItem("hoppersPendingAccount", JSON.stringify({
+    const pending = await savePendingSignup({
       type: formData.get("type"),
       email: String(formData.get("email") || "").trim(),
       password: formData.get("password"),
@@ -1168,10 +1184,10 @@ registerForm.addEventListener("submit", async (event) => {
       plan,
       clientReferenceId: createClientReferenceId(),
       startedAt: new Date().toISOString(),
-    }));
+    });
     showToast("Opening secure payment...");
     window.setTimeout(() => {
-      window.location.href = paymentPages[plan] || "./sign-in.html";
+      window.location.href = pending.paymentPage || paymentPages[plan] || "./sign-in.html";
     }, 350);
   } catch (error) {
     showToast(error.message || "Could not prepare payment.");
