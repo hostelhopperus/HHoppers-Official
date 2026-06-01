@@ -8,11 +8,14 @@ const findHostelsPanel = document.querySelector("#find-hostels-panel");
 const openingFilters = document.querySelector("#opening-filters");
 const accountOpeningGrid = document.querySelector("#account-opening-grid");
 const savedOpeningList = document.querySelector("#saved-opening-list");
+const workerProfilePage = document.querySelector("#worker-profile-page");
 const workerAccountHome = document.querySelector("#worker-account-home");
 const hostelAccountHome = document.querySelector("#hostel-account-home");
 const hostelPhotosPanel = document.querySelector("#hostel-photos-panel");
 const hostelPhotosForm = document.querySelector("#hostel-photos-form");
 const logoutButton = document.querySelector("#account-logout");
+const manageBillingButton = document.querySelector("#manage-billing");
+const cancelMembershipButton = document.querySelector("#cancel-membership");
 const toast = document.querySelector("#toast");
 
 let currentAccount = null;
@@ -21,8 +24,23 @@ let currentOpenings = [];
 const planLabels = {
   "worker-basic": "Worker Basic",
   "worker-premium": "Worker Premium",
-  "hostel-partner": "Hostel Partner",
+  "hostel-basic": "Hostel Basic",
+  "hostel-premium": "Hostel Premium",
+  "hostel-partner": "Hostel Basic",
 };
+
+const paymentPages = {
+  "worker-basic": "./payment-worker-basic.html",
+  "worker-premium": "./payment-worker-premium.html",
+  "hostel-basic": "./payment-hostel-basic.html",
+  "hostel-premium": "./payment-hostel-premium.html",
+  "hostel-partner": "./payment-hostel-basic.html",
+};
+
+function createClientReferenceId() {
+  const randomPart = Math.random().toString(36).slice(2, 10);
+  return `hoppers_${Date.now()}_${randomPart}`;
+}
 
 function accountNextUrl() {
   const next = new URLSearchParams(window.location.search).get("next");
@@ -103,7 +121,39 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
+function profileList(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
+  return String(value || "")
+    .split(/,|\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function displayList(value) {
+  return profileList(value).join(", ");
+}
+
+function listBadges(value, fallback = "Not added yet") {
+  const items = profileList(value);
+  return items.length
+    ? items.map((item) => `<span class="badge">${escapeHtml(item)}</span>`).join("")
+    : `<span class="muted-inline">${escapeHtml(fallback)}</span>`;
+}
+
+function textBlock(value, fallback = "Not added yet.") {
+  const text = String(value || "").trim();
+  return text ? escapeHtml(text).replaceAll("\n", "<br />") : `<span class="muted-inline">${escapeHtml(fallback)}</span>`;
+}
+
+function safeExternalUrl(value) {
+  const url = String(value || "").trim();
+  return /^https?:\/\//i.test(url) ? url : "";
+}
+
 async function fetchJson(url, options = {}) {
+  if (window.location.protocol === "file:") {
+    throw new Error("Account saving needs the Hoppers server. Open the live site or localhost, not a file:// copy.");
+  }
   const response = await fetch(url, {
     credentials: "same-origin",
     headers: {
@@ -150,6 +200,16 @@ function formProfile(form) {
     endDate: String(formData.get("endDate") || ""),
     plan: String(formData.get("plan") || ""),
     bio: String(formData.get("bio") || "").trim(),
+    headline: type === "worker" ? String(formData.get("headline") || "").trim() : "",
+    languages: type === "worker" ? String(formData.get("languages") || "").trim() : "",
+    previousHostels: type === "worker" ? String(formData.get("previousHostels") || "").trim() : "",
+    experience: type === "worker" ? String(formData.get("experience") || "").trim() : "",
+    education: type === "worker" ? String(formData.get("education") || "").trim() : "",
+    certifications: type === "worker" ? String(formData.get("certifications") || "").trim() : "",
+    references: type === "worker" ? String(formData.get("references") || "").trim() : "",
+    preferredRegions: type === "worker" ? String(formData.get("preferredRegions") || "").trim() : "",
+    workStyle: type === "worker" ? String(formData.get("workStyle") || "").trim() : "",
+    portfolio: type === "worker" ? String(formData.get("portfolio") || "").trim() : "",
   };
   return profile;
 }
@@ -219,11 +279,14 @@ function checkedTags(form, tags = []) {
 }
 
 function syncPlanOptions(type, select) {
-  select.querySelector('option[value="hostel-partner"]').disabled = type !== "hostel";
-  select.querySelector('option[value="worker-basic"]').disabled = type === "hostel";
-  select.querySelector('option[value="worker-premium"]').disabled = type === "hostel";
-  if (type === "hostel") select.value = "hostel-partner";
-  if (type === "worker" && select.value === "hostel-partner") select.value = "worker-basic";
+  select.querySelectorAll('option[value^="hostel-"]').forEach((option) => {
+    option.disabled = type !== "hostel";
+  });
+  select.querySelectorAll('option[value^="worker-"]').forEach((option) => {
+    option.disabled = type === "hostel";
+  });
+  if (type === "hostel" && !select.value.startsWith("hostel-")) select.value = "hostel-basic";
+  if (type === "worker" && !select.value.startsWith("worker-")) select.value = "worker-basic";
   select.closest("form")?.querySelectorAll(".worker-nationality-field").forEach((field) => {
     field.hidden = type === "hostel";
   });
@@ -232,6 +295,9 @@ function syncPlanOptions(type, select) {
   });
   select.closest("form")?.querySelectorAll(".hostel-photo-field").forEach((field) => {
     field.hidden = type !== "hostel";
+  });
+  select.closest("form")?.querySelectorAll(".worker-depth-field").forEach((field) => {
+    field.hidden = type === "hostel";
   });
 }
 
@@ -244,10 +310,20 @@ function fillProfileForm(account) {
   profileForm.elements.startDate.value = profile.startDate || "";
   profileForm.elements.endDate.value = profile.endDate || "";
   profileForm.elements.bio.value = profile.bio || "";
+  profileForm.elements.headline.value = account.type === "worker" ? profile.headline || "" : "";
+  profileForm.elements.languages.value = account.type === "worker" ? displayList(profile.languages) : "";
+  profileForm.elements.previousHostels.value = account.type === "worker" ? displayList(profile.previousHostels) : "";
+  profileForm.elements.experience.value = account.type === "worker" ? profile.experience || "" : "";
+  profileForm.elements.education.value = account.type === "worker" ? profile.education || "" : "";
+  profileForm.elements.certifications.value = account.type === "worker" ? displayList(profile.certifications) : "";
+  profileForm.elements.references.value = account.type === "worker" ? profile.references || "" : "";
+  profileForm.elements.preferredRegions.value = account.type === "worker" ? displayList(profile.preferredRegions) : "";
+  profileForm.elements.workStyle.value = account.type === "worker" ? profile.workStyle || "" : "";
+  profileForm.elements.portfolio.value = account.type === "worker" ? profile.portfolio || "" : "";
   profileForm.elements.photoData.value = profile.photo || "";
   profileForm.elements.photosData.value = JSON.stringify(Array.isArray(profile.photos) ? profile.photos.slice(0, 10) : []);
   syncPlanOptions(account.type, profileForm.elements.plan);
-  profileForm.elements.plan.value = profile.plan || (account.type === "hostel" ? "hostel-partner" : "worker-basic");
+  profileForm.elements.plan.value = profile.plan || (account.type === "hostel" ? "hostel-basic" : "worker-basic");
   checkedTags(profileForm, profile.tags || []);
   document.querySelector("#tags-legend").textContent = account.type === "hostel" ? "Roles needed" : "Skills";
 }
@@ -263,6 +339,187 @@ function renderAvatar(profile) {
     return;
   }
   avatar.textContent = (profile.name || "H").trim().slice(0, 1).toUpperCase();
+}
+
+function profileCompletion(profile) {
+  const checks = [
+    profile.photo,
+    profile.headline,
+    profile.bio,
+    profile.nationality,
+    profile.location,
+    profile.startDate,
+    profile.endDate,
+    profile.workStyle,
+    profile.experience,
+    profile.education,
+    profile.references,
+    profile.portfolio,
+    profileList(profile.tags).length,
+    profileList(profile.languages).length,
+    profileList(profile.previousHostels).length,
+    profileList(profile.preferredRegions).length,
+    profileList(profile.certifications).length,
+  ];
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+}
+
+function workerAvatarMarkup(profile) {
+  return profile.photo
+    ? `<img src="${escapeHtml(profile.photo)}" alt="" />`
+    : `<span>${escapeHtml((profile.name || "H").trim().slice(0, 1).toUpperCase())}</span>`;
+}
+
+function previousHostelCards(profile) {
+  const hostels = profileList(profile.previousHostels);
+  return hostels.length
+    ? hostels
+        .map(
+          (hostel) => `
+            <article>
+              <strong>${escapeHtml(hostel)}</strong>
+              <p>Past hostel, volunteer exchange, seasonal role, or hospitality reference.</p>
+            </article>
+          `
+        )
+        .join("")
+    : `<p class="empty-state">Add hostels or hospitality roles you have worked before.</p>`;
+}
+
+function renderWorkerProfile(account) {
+  if (!workerProfilePage) return;
+  const profile = account.profile || {};
+  const completion = profileCompletion(profile);
+  const portfolio = safeExternalUrl(profile.portfolio);
+  document.querySelector("#worker-profile-view").innerHTML = `
+    <article class="worker-profile-hero">
+      <div class="worker-cover"></div>
+      <div class="worker-identity-row">
+        <div class="worker-profile-avatar">${workerAvatarMarkup(profile)}</div>
+        <div class="worker-identity-copy">
+          <p class="eyebrow">View profile</p>
+          <h2>${escapeHtml(profile.name || "Worker profile")}</h2>
+          <p class="worker-headline">${escapeHtml(profile.headline || "Add a short headline that tells hostels what you are great at.")}</p>
+          <div class="worker-profile-meta">
+            <span>${escapeHtml(profile.location || "Location open")}</span>
+            <span>${escapeHtml(profile.nationality || "Nationality not added")}</span>
+            <span>${escapeHtml(account.billing?.planLabel || planLabels[profile.plan] || "Plan pending")}</span>
+          </div>
+        </div>
+        <div class="worker-profile-actions">
+          <a class="button button-dark" href="#profile-form">Edit profile</a>
+          <a class="button button-light" href="#profile-form">Change photo</a>
+        </div>
+      </div>
+    </article>
+
+    <div class="worker-profile-grid">
+      <section class="worker-profile-card about-card">
+        <div class="section-title-row">
+          <div>
+            <p class="eyebrow">About</p>
+            <h3>Worker summary</h3>
+          </div>
+          <span class="badge">${completion}% complete</span>
+        </div>
+        <p>${textBlock(profile.bio, "Write a little about who you are, how you work, and what kind of hostel stay fits you.")}</p>
+      </section>
+
+      <section class="worker-profile-card">
+        <p class="eyebrow">Previously worked at</p>
+        <h3>Hostel and hospitality history</h3>
+        <div class="previous-hostel-list">${previousHostelCards(profile)}</div>
+      </section>
+
+      <section class="worker-profile-card">
+        <p class="eyebrow">Experience</p>
+        <h3>Relevant work</h3>
+        <p>${textBlock(profile.experience, "Add reception, housekeeping, bar, cafe, events, tours, social media, maintenance, or guest support experience.")}</p>
+      </section>
+
+      <section class="worker-profile-card">
+        <p class="eyebrow">Work style</p>
+        <h3>How you show up</h3>
+        <p>${textBlock(profile.workStyle, "Add how you handle guests, managers, shared housing, busy shifts, and early or late schedules.")}</p>
+      </section>
+
+      <section class="worker-profile-card">
+        <p class="eyebrow">Skills</p>
+        <h3>Roles you can cover</h3>
+        <div class="tag-list">${listBadges(profile.tags, "Choose skills in the edit profile form.")}</div>
+      </section>
+
+      <section class="worker-profile-card">
+        <p class="eyebrow">Languages</p>
+        <h3>Guest communication</h3>
+        <div class="tag-list">${listBadges(profile.languages, "Add languages you speak.")}</div>
+      </section>
+
+      <section class="worker-profile-card">
+        <p class="eyebrow">Availability</p>
+        <h3>Dates and regions</h3>
+        <dl class="brief-list compact">
+          <div>
+            <dt>Dates</dt>
+            <dd>${escapeHtml(dateRange(profile.startDate, profile.endDate))}</dd>
+          </div>
+          <div>
+            <dt>Preferred regions</dt>
+            <dd>${profileList(profile.preferredRegions).length ? escapeHtml(displayList(profile.preferredRegions)) : "Open to the right fit"}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="worker-profile-card">
+        <p class="eyebrow">Credentials</p>
+        <h3>Education, certificates, references</h3>
+        <dl class="brief-list compact">
+          <div>
+            <dt>Education</dt>
+            <dd>${textBlock(profile.education)}</dd>
+          </div>
+          <div>
+            <dt>Certificates</dt>
+            <dd>${profileList(profile.certifications).length ? escapeHtml(displayList(profile.certifications)) : "Not added yet"}</dd>
+          </div>
+          <div>
+            <dt>References</dt>
+            <dd>${textBlock(profile.references, "Available on request, or add reference details here.")}</dd>
+          </div>
+        </dl>
+      </section>
+
+      <section class="worker-profile-card">
+        <p class="eyebrow">Links</p>
+        <h3>Portfolio or social profile</h3>
+        ${
+          portfolio
+            ? `<a class="text-link" href="${escapeHtml(portfolio)}" target="_blank" rel="noreferrer">${escapeHtml(portfolio)}</a>`
+            : `<p><span class="muted-inline">Add a portfolio, video intro, or relevant social profile.</span></p>`
+        }
+      </section>
+    </div>
+  `;
+
+  document.querySelector("#worker-language-view").innerHTML = `
+    <div class="panel-heading">
+      <div>
+        <p class="eyebrow">Language</p>
+        <h2>Languages and guest comfort</h2>
+      </div>
+      <a class="button button-light" href="#profile-form">Edit languages</a>
+    </div>
+    <div class="language-grid">
+      <article>
+        <h3>Languages listed</h3>
+        <div class="tag-list">${listBadges(profile.languages, "No languages added yet.")}</div>
+      </article>
+      <article>
+        <h3>Where this helps</h3>
+        <p>Languages show hostels where you can help with reception, check-ins, events, tours, signs, guest questions, and late-night problem solving.</p>
+      </article>
+    </div>
+  `;
 }
 
 function renderHostelGallery(account) {
@@ -726,10 +983,61 @@ function renderHostelLanding(account) {
 
 function renderAccountLanding(account) {
   const isHostel = account.type === "hostel";
+  if (workerProfilePage) workerProfilePage.hidden = isHostel;
   workerAccountHome.hidden = isHostel;
   hostelAccountHome.hidden = !isHostel;
   if (isHostel) renderHostelLanding(account);
-  else renderWorkerLanding(account);
+  else {
+    renderWorkerProfile(account);
+    renderWorkerLanding(account);
+  }
+}
+
+function billingLabel(value) {
+  if (value === "paid") return "Active";
+  if (value === "canceling") return "Canceling";
+  if (value === "canceled") return "Canceled";
+  return statusLabel(value || "not_connected");
+}
+
+function renderMembership(account) {
+  const billing = account.billing || {};
+  const status = billing.status || "not_connected";
+  const hasCustomer = Boolean(billing.stripeCustomerId);
+  const hasSubscription = Boolean(billing.stripeSubscriptionId);
+  const statusPill = document.querySelector("#membership-status");
+  const statusClass =
+    status === "paid" ? "status-approved" : status === "canceling" ? "status-pending" : status === "canceled" ? "status-rejected" : "status-pending";
+  statusPill.className = `status-pill ${statusClass}`;
+  statusPill.textContent = billingLabel(status);
+  document.querySelector("#membership-plan").textContent = billing.planLabel || planLabels[account.profile?.plan] || "Plan pending";
+  document.querySelector("#membership-subscription").textContent = hasSubscription
+    ? billing.subscriptionStatus || "Connected"
+    : hasCustomer
+      ? "Stripe customer connected; subscription lookup available"
+      : "Not connected yet";
+  document.querySelector("#membership-renewal").textContent = billing.currentPeriodEnd
+    ? `${status === "canceling" ? "Ends" : "Renews"} ${new Date(billing.currentPeriodEnd).toLocaleDateString()}`
+    : "Not available yet";
+  document.querySelector("#membership-note").textContent =
+    status === "canceling"
+      ? "Your Stripe subscription is scheduled to cancel at the end of the paid period."
+      : status === "canceled"
+        ? "This membership is canceled. Automatic recurring payments should be stopped in Stripe."
+        : "Cancellations are sent to Stripe, so automatic recurring payments stop through the real subscription.";
+  if (manageBillingButton) {
+    manageBillingButton.disabled = !hasCustomer;
+    manageBillingButton.title = hasCustomer ? "" : "Stripe customer details are not connected yet.";
+  }
+  if (cancelMembershipButton) {
+    cancelMembershipButton.textContent = "Cancel subscription";
+    cancelMembershipButton.disabled = (!hasSubscription && !hasCustomer) || status === "canceling" || status === "canceled";
+    cancelMembershipButton.title = hasSubscription
+      ? ""
+      : hasCustomer
+        ? "Hoppers will ask Stripe for the active subscription tied to this customer."
+        : "Stripe subscription details are not connected yet.";
+  }
 }
 
 function showDashboard(payload) {
@@ -754,6 +1062,7 @@ function showDashboard(payload) {
 
   fillProfileForm(account);
   renderAccountLanding(account);
+  renderMembership(account);
   renderApplications(payload.applications || []);
   findHostelsPanel.hidden = account.type === "hostel";
   if (account.type === "worker") renderFindHostels();
@@ -782,6 +1091,17 @@ authTabButtons.forEach((button) => {
 
 registerForm.elements.type.addEventListener("change", () => {
   syncPlanOptions(registerForm.elements.type.value, registerForm.elements.plan);
+});
+
+workerProfilePage?.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-worker-panel]");
+  if (!button) return;
+  workerProfilePage.querySelectorAll("[data-worker-panel]").forEach((item) => {
+    item.classList.toggle("active", item === button);
+  });
+  workerProfilePage.querySelectorAll("[data-worker-section]").forEach((section) => {
+    section.hidden = section.dataset.workerSection !== button.dataset.workerPanel;
+  });
 });
 
 loginForm.addEventListener("submit", async (event) => {
@@ -816,21 +1136,22 @@ registerForm.addEventListener("submit", async (event) => {
   try {
     profile = await attachPhoto(registerForm, profile);
     validateDates(profile);
-    const payload = await fetchJson("/api/account/register", {
-      method: "POST",
-      body: JSON.stringify({
-        type: formData.get("type"),
-        email: formData.get("email"),
-        password: formData.get("password"),
-        profile,
-      }),
-    });
-    registerForm.reset();
-    showDashboard(payload);
-    showToast("Account created.");
-    continueToNext();
+    const plan = profile.plan || (formData.get("type") === "hostel" ? "hostel-basic" : "worker-basic");
+    sessionStorage.setItem("hoppersPendingAccount", JSON.stringify({
+      type: formData.get("type"),
+      email: String(formData.get("email") || "").trim(),
+      password: formData.get("password"),
+      profile,
+      plan,
+      clientReferenceId: createClientReferenceId(),
+      startedAt: new Date().toISOString(),
+    }));
+    showToast("Opening secure payment...");
+    window.setTimeout(() => {
+      window.location.href = paymentPages[plan] || "./sign-in.html";
+    }, 350);
   } catch (error) {
-    showToast(error.message || "Could not create account.");
+    showToast(error.message || "Could not prepare payment.");
   } finally {
     button.disabled = false;
   }
@@ -861,6 +1182,35 @@ logoutButton.addEventListener("click", async () => {
   await fetchJson("/api/account/logout", { method: "POST" }).catch(() => {});
   showAuth();
   showToast("Logged out.");
+});
+
+manageBillingButton?.addEventListener("click", async () => {
+  manageBillingButton.disabled = true;
+  try {
+    const payload = await fetchJson("/api/account/billing-portal", { method: "POST" });
+    window.location.href = payload.url;
+  } catch (error) {
+    showToast(error.message || "Could not open Stripe billing.");
+  } finally {
+    manageBillingButton.disabled = false;
+  }
+});
+
+cancelMembershipButton?.addEventListener("click", async () => {
+  if (!confirm("Cancel this Hoppers subscription and stop future recurring Stripe payments?")) return;
+  cancelMembershipButton.disabled = true;
+  try {
+    const payload = await fetchJson("/api/account/cancel-membership", {
+      method: "POST",
+      body: JSON.stringify({ confirm: true }),
+    });
+    showDashboard(payload);
+    showToast("Subscription cancellation sent to Stripe.");
+  } catch (error) {
+    showToast(error.message || "Could not cancel subscription.");
+  } finally {
+    cancelMembershipButton.disabled = false;
+  }
 });
 
 populateNationalitySelects();

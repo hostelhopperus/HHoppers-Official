@@ -1,4 +1,3 @@
-
 const pendingSignup = (() => {
   try {
     return JSON.parse(sessionStorage.getItem("hoppersPendingAccount") || "null");

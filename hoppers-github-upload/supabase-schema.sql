@@ -42,13 +42,45 @@ create table if not exists public.email_outbox (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.password_resets (
+  id uuid primary key,
+  account_id uuid references public.accounts(id) on delete cascade,
+  email text not null,
+  token_hash text not null unique,
+  expires_at timestamptz not null,
+  used_at timestamptz,
+  requested_by text not null default 'account',
+  requested_ip text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists password_resets_token_hash_idx on public.password_resets (token_hash);
+create index if not exists password_resets_account_idx on public.password_resets (account_id);
+create index if not exists password_resets_expires_at_idx on public.password_resets (expires_at);
+
+create table if not exists public.admin_actions (
+  id uuid primary key,
+  action text not null,
+  account_id uuid references public.accounts(id) on delete set null,
+  target_email text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists admin_actions_account_idx on public.admin_actions (account_id);
+create index if not exists admin_actions_created_at_idx on public.admin_actions (created_at desc);
+
 alter table public.submissions enable row level security;
 alter table public.accounts enable row level security;
 alter table public.email_outbox enable row level security;
+alter table public.password_resets enable row level security;
+alter table public.admin_actions enable row level security;
 
 grant select, insert, update, delete on public.submissions to service_role;
 grant select, insert, update, delete on public.accounts to service_role;
 grant select, insert, update, delete on public.email_outbox to service_role;
+grant select, insert, update, delete on public.password_resets to service_role;
+grant select, insert, update, delete on public.admin_actions to service_role;
 
 -- Public browser users should not query these tables directly.
 -- The Node server uses the service role after its own authorization checks.
@@ -72,6 +104,22 @@ with check (true);
 drop policy if exists "service role manages email outbox" on public.email_outbox;
 create policy "service role manages email outbox"
 on public.email_outbox
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "service role manages password resets" on public.password_resets;
+create policy "service role manages password resets"
+on public.password_resets
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "service role manages admin actions" on public.admin_actions;
+create policy "service role manages admin actions"
+on public.admin_actions
 for all
 to service_role
 using (true)

@@ -9,7 +9,7 @@
     <title>Hoppers Account</title>
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./assets/icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=29" />
+    <link rel="stylesheet" href="./styles.css?v=30" />
   </head>
   <body class="account-page">
     <header class="site-header">
@@ -64,6 +64,7 @@
               <input name="password" required type="password" autocomplete="current-password" placeholder="Your password" />
             </label>
             <button class="button button-dark" type="submit">Open account</button>
+            <p class="auth-helper"><a href="./forgot-password.html">Forgot username or password?</a></p>
           </form>
 
           <form id="register-form" class="account-form" hidden>
@@ -134,12 +135,13 @@
                 <select name="plan">
                   <option value="worker-basic">Worker Basic</option>
                   <option value="worker-premium">Worker Premium</option>
-                  <option value="hostel-partner">Hostel Partner</option>
+                  <option value="hostel-basic">Hostel Basic</option>
+                  <option value="hostel-premium">Hostel Premium</option>
                 </select>
               </label>
               <textarea name="bio" placeholder="Short bio, role details, languages, housing notes, or work preferences"></textarea>
             </div>
-            <button class="button button-dark" type="submit">Create account</button>
+            <button class="button button-dark" type="submit">Continue to payment</button>
           </form>
         </div>
       </section>
@@ -178,6 +180,75 @@
           </aside>
 
           <div class="account-main">
+            <section id="worker-profile-page" class="account-panel worker-profile-page" hidden>
+              <div class="worker-profile-nav" aria-label="Worker profile tools">
+                <button class="active" type="button" data-worker-panel="view">View profile</button>
+                <button type="button" data-worker-panel="settings">Settings</button>
+                <button type="button" data-worker-panel="language">Language</button>
+                <button type="button" data-worker-panel="help">Help</button>
+              </div>
+
+              <div id="worker-profile-view" class="worker-profile-section" data-worker-section="view"></div>
+
+              <div id="worker-settings-view" class="worker-profile-section" data-worker-section="settings" hidden>
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Settings</p>
+                    <h2>Worker profile controls</h2>
+                  </div>
+                  <span class="badge">Private to you</span>
+                </div>
+                <div class="settings-grid">
+                  <article>
+                    <h3>Profile visibility</h3>
+                    <p>Approved profiles can be reviewed by hostel admins when you apply or message them.</p>
+                  </article>
+                  <article>
+                    <h3>Applications</h3>
+                    <p>Your applications and open threads stay tied to this account email.</p>
+                  </article>
+                  <article>
+                    <h3>Security</h3>
+                    <p>Passwords stay hidden. If you forget yours, Hoppers emails a one-time reset link.</p>
+                  </article>
+                  <article>
+                    <h3>Billing</h3>
+                    <p>Plan and membership controls live in the billing section below.</p>
+                  </article>
+                </div>
+              </div>
+
+              <div id="worker-language-view" class="worker-profile-section" data-worker-section="language" hidden></div>
+
+              <div id="worker-help-view" class="worker-profile-section" data-worker-section="help" hidden>
+                <div class="panel-heading">
+                  <div>
+                    <p class="eyebrow">Help</p>
+                    <h2>Make the profile stronger</h2>
+                  </div>
+                  <a class="button button-light" href="./contact.html">Contact Hoppers</a>
+                </div>
+                <div class="help-list">
+                  <article>
+                    <strong>Use a clear profile photo</strong>
+                    <p>Hostels should feel like they are meeting a real person before a message starts.</p>
+                  </article>
+                  <article>
+                    <strong>Add previous hostel work</strong>
+                    <p>Even one past stay, volunteer exchange, front desk shift, or cleaning role helps a hostel trust the fit.</p>
+                  </article>
+                  <article>
+                    <strong>Be specific about dates</strong>
+                    <p>Short-term, seasonal, and longer-term options are easier to match when your availability is clear.</p>
+                  </article>
+                  <article>
+                    <strong>Name your languages</strong>
+                    <p>Reception, events, tours, and guest support all get easier when hostels know how you communicate.</p>
+                  </article>
+                </div>
+              </div>
+            </section>
+
             <section id="worker-account-home" class="account-panel account-landing-panel" hidden>
               <div class="panel-heading">
                 <div>
@@ -230,9 +301,29 @@
                 <span>Profile photo</span>
                 <input name="photo" accept="image/*" type="file" />
               </label>
+              <label class="worker-depth-field">
+                <span>Profile headline</span>
+                <input name="headline" placeholder="Friendly reception worker, social host, and early riser" />
+              </label>
               <label class="worker-nationality-field">
                 <span>Nationality</span>
                 <select name="nationality" data-nationality-select></select>
+              </label>
+              <label class="worker-depth-field">
+                <span>Languages</span>
+                <input name="languages" placeholder="English, Spanish, Dutch" />
+              </label>
+              <label class="worker-depth-field">
+                <span>Previously worked at</span>
+                <input name="previousHostels" placeholder="Hostel names, volunteer stays, or seasonal roles" />
+              </label>
+              <label class="worker-depth-field">
+                <span>Preferred regions</span>
+                <input name="preferredRegions" placeholder="Portugal, Switzerland, Southeast Asia" />
+              </label>
+              <label class="worker-depth-field">
+                <span>Portfolio / social link</span>
+                <input name="portfolio" placeholder="https://..." />
               </label>
               <label class="hostel-website-field" hidden>
                 <span>Website</span>
@@ -245,7 +336,8 @@
                   <select name="plan">
                     <option value="worker-basic">Worker Basic</option>
                     <option value="worker-premium">Worker Premium</option>
-                    <option value="hostel-partner">Hostel Partner</option>
+                    <option value="hostel-basic">Hostel Basic</option>
+                    <option value="hostel-premium">Hostel Premium</option>
                   </select>
                 </label>
                 <fieldset class="field-group">
@@ -266,6 +358,26 @@
                 <label class="date-field">
                   <span>End date</span>
                   <input name="endDate" type="date" />
+                </label>
+                <label class="worker-depth-field">
+                  <span>Work style</span>
+                  <textarea name="workStyle" placeholder="How you work with guests, managers, roommates, and busy shifts"></textarea>
+                </label>
+                <label class="worker-depth-field">
+                  <span>Experience</span>
+                  <textarea name="experience" placeholder="Past hospitality, cleaning, reception, bar, cafe, events, tours, social media, or maintenance experience"></textarea>
+                </label>
+                <label class="worker-depth-field">
+                  <span>Education</span>
+                  <textarea name="education" placeholder="School, courses, training, or relevant background"></textarea>
+                </label>
+                <label class="worker-depth-field">
+                  <span>Certifications</span>
+                  <input name="certifications" placeholder="First aid, food handling, lifeguard, TEFL" />
+                </label>
+                <label class="worker-depth-field">
+                  <span>References</span>
+                  <textarea name="references" placeholder="Reference names, contact notes, or 'available on request'"></textarea>
                 </label>
                 <textarea name="bio"></textarea>
                 <button class="button button-dark" type="submit">Save profile</button>
@@ -351,8 +463,39 @@
               <article>
                 <p class="eyebrow">Security</p>
                 <h2>Login details</h2>
-                <p>Password login is active for this account. Password reset can be added when email sending is fully connected.</p>
+                <p>Password login is active for this account. If you ever get locked out, Hoppers can email a secure reset link.</p>
               </article>
+            </section>
+
+            <section class="account-panel membership-panel">
+              <div class="panel-heading">
+                <div>
+                  <p class="eyebrow">Membership</p>
+                  <h2>Plan and billing</h2>
+                </div>
+                <span id="membership-status" class="status-pill status-pending">Checking</span>
+              </div>
+              <dl class="membership-list">
+                <div>
+                  <dt>Current plan</dt>
+                  <dd id="membership-plan">Plan pending</dd>
+                </div>
+                <div>
+                  <dt>Stripe subscription</dt>
+                  <dd id="membership-subscription">Not connected yet</dd>
+                </div>
+                <div>
+                  <dt>Renewal / end date</dt>
+                  <dd id="membership-renewal">Not available yet</dd>
+                </div>
+              </dl>
+              <div class="membership-actions">
+                <button id="manage-billing" class="button button-light" type="button">Manage subscription in Stripe</button>
+                <button id="cancel-membership" class="button button-danger" type="button">Cancel subscription</button>
+              </div>
+              <p id="membership-note" class="form-note">
+                Cancellations are sent to Stripe, so automatic recurring payments stop through the real subscription.
+              </p>
             </section>
           </div>
         </div>
@@ -372,7 +515,7 @@
     </footer>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="./account.js?v=18"></script>
+    <script src="./account.js?v=21"></script>
     <script src="./site.js?v=1"></script>
     <script src="./app.js?v=1"></script>
   </body>

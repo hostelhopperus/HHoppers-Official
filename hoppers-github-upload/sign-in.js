@@ -134,6 +134,9 @@ function showToast(message) {
 }
 
 async function fetchJson(url, options = {}) {
+  if (window.location.protocol === "file:") {
+    throw new Error("Account saving needs the Hoppers server. Open the live site or localhost, not a file:// copy.");
+  }
   const response = await fetch(url, {
     credentials: "same-origin",
     headers: {

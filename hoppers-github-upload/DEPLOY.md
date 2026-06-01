@@ -31,6 +31,8 @@ SUPABASE_SERVICE_ROLE_KEY=...
 
 Run `supabase-schema.sql` in Supabase before switching those on.
 
+Production account creation is intentionally blocked unless Supabase is connected, because Vercel's local filesystem is temporary and can lose account data. If Supabase errors in production, account creation and account changes should fail instead of saving to temporary server files.
+
 ## Optional later services
 
 Email delivery:
@@ -40,15 +42,26 @@ RESEND_API_KEY=...
 EMAIL_FROM=Hoppers <hello@yourdomain.com>
 ```
 
+Real email is needed for forgot-password recovery and for admin-sent reset links. Without it, reset messages only land in the server outbox.
+
 Stripe after the website/domain is live:
 
 ```text
 STRIPE_SECRET_KEY=...
 STRIPE_WEBHOOK_SECRET=...
-STRIPE_WORKER_BASIC_PRICE_ID=...
-STRIPE_WORKER_PREMIUM_PRICE_ID=...
-STRIPE_HOSTEL_PARTNER_PRICE_ID=...
+STRIPE_WORKER_BASIC_PAYMENT_LINK_ID=plink_...
+STRIPE_WORKER_PREMIUM_PAYMENT_LINK_ID=plink_...
+STRIPE_HOSTEL_BASIC_PAYMENT_LINK_ID=plink_...
+STRIPE_HOSTEL_PREMIUM_PAYMENT_LINK_ID=plink_...
 ```
+
+Set every Stripe Payment Link success redirect to:
+
+```text
+https://yourdomain.com/payment-success.html?payment=success&session_id={CHECKOUT_SESSION_ID}
+```
+
+Enable Stripe Customer Portal. Hoppers uses it for billing management and uses the stored Stripe subscription ID to cancel recurring payments from the account dashboard. If Hoppers only has a Stripe customer ID, it will look up that customer's active subscription before canceling.
 
 ## Easy hosting options
 

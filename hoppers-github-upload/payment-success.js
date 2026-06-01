@@ -12,6 +12,9 @@ function setPaymentStatus(title, message) {
 }
 
 async function fetchJson(url, options = {}) {
+  if (window.location.protocol === "file:") {
+    throw new Error("Account creation needs the Hoppers server. Open the live site or localhost, not a file:// copy.");
+  }
   const response = await fetch(url, {
     credentials: "same-origin",
     headers: {
@@ -32,6 +35,7 @@ async function finishPaidSignup() {
     params.get("paid") === "true" ||
     params.get("redirect_status") === "succeeded" ||
     params.get("stripe_success") === "true";
+  const checkoutSessionId = params.get("session_id") || params.get("checkout_session_id") || params.get("session");
 
   const pending = sessionStorage.getItem("hoppersPendingAccount");
   if (!paymentLooksSuccessful) {
@@ -65,6 +69,8 @@ async function finishPaidSignup() {
           plan: account.plan,
           planLabel: planLabels[account.plan] || account.plan,
           paidAt: new Date().toISOString(),
+          stripeCheckoutSessionId: checkoutSessionId || "",
+          clientReferenceId: account.clientReferenceId || account.signupId || "",
         },
       }),
     });

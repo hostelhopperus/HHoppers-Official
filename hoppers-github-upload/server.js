@@ -11,12 +11,22 @@ const DATA_DIR = process.env.DATA_DIR || (process.env.VERCEL ? path.join("/tmp",
 const SUBMISSIONS_FILE = path.join(DATA_DIR, "submissions.json");
 const EMAIL_OUTBOX_FILE = path.join(DATA_DIR, "email-outbox.json");
 const ACCOUNTS_FILE = path.join(DATA_DIR, "accounts.json");
+const PASSWORD_RESETS_FILE = path.join(DATA_DIR, "password-resets.json");
+const ADMIN_ACTIONS_FILE = path.join(DATA_DIR, "admin-actions.json");
 const ADMIN_CODE = process.env.ADMIN_CODE || "finntazer_69";
 const SESSION_COOKIE = "hh_admin";
 const ACCOUNT_COOKIE = "hh_account";
+const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 const sessions = new Set();
 const accountSessions = new Map();
 const rateBuckets = new Map();
+
+const STRIPE_PAYMENT_LINK_IDS = {
+  "worker-basic": process.env.STRIPE_WORKER_BASIC_PAYMENT_LINK_ID || "plink_1TbvRaJwdwooinLhcCKhRdpo",
+  "worker-premium": process.env.STRIPE_WORKER_PREMIUM_PAYMENT_LINK_ID || "plink_1TbvSRJwdwooinLhMGKE1iGH",
+  "hostel-basic": process.env.STRIPE_HOSTEL_BASIC_PAYMENT_LINK_ID || "plink_1TbvSyJwdwooinLhemGZ98DA",
+  "hostel-premium": process.env.STRIPE_HOSTEL_PREMIUM_PAYMENT_LINK_ID || "plink_1TbvTJJwdwooinLhZ9tr5Nq5",
+};
 
 const PLAN_DETAILS = {
   "worker-basic": {
@@ -169,6 +179,8 @@ async function ensureDataFiles() {
   await readJson(SUBMISSIONS_FILE, []);
   await readJson(EMAIL_OUTBOX_FILE, []);
   await readJson(ACCOUNTS_FILE, []);
+  await readJson(PASSWORD_RESETS_FILE, []);
+  await readJson(ADMIN_ACTIONS_FILE, []);
 }
 
 async function readJson(file, fallback) {
@@ -241,17 +253,27 @@ function buildPaymentRecord(type, plan) {
 function buildAccountBilling(type, plan, incoming = {}) {
   const normalized = normalizedPlan(plan || incoming.plan, type);
   const details = planDetails(normalized, type);
-  const paid = String(incoming.status || "").toLowerCase() === "paid";
+  const incomingStatus = String(incoming.status || "").toLowerCase();
+  const billingStatus = ["paid", "canceling", "canceled", "past_due", "incomplete", "billing_setup_after_approval"].includes(incomingStatus)
+    ? incomingStatus
+    : "";
+  const paid = billingStatus === "paid";
   return {
-    provider: paid ? "stripe" : process.env.STRIPE_SECRET_KEY ? "stripe" : "pre-stripe",
+    provider: billingStatus ? "stripe" : process.env.STRIPE_SECRET_KEY ? "stripe" : "pre-stripe",
     plan: normalized,
     planLabel: details.label,
     signupFee: details.signupFee,
     monthlyFee: details.monthlyFee,
-    status: paid ? "paid" : "billing_setup_after_approval",
+    status: billingStatus || "billing_setup_after_approval",
     paidAt: paid ? String(incoming.paidAt || new Date().toISOString()) : incoming.paidAt || null,
+    stripeCustomerId: incoming.stripeCustomerId || null,
     stripeCheckoutSessionId: incoming.stripeCheckoutSessionId || null,
     stripeSubscriptionId: incoming.stripeSubscriptionId || null,
+    stripePaymentLinkId: incoming.stripePaymentLinkId || null,
+    subscriptionStatus: incoming.subscriptionStatus || null,
+    cancelAtPeriodEnd: Boolean(incoming.cancelAtPeriodEnd),
+    canceledAt: incoming.canceledAt || null,
+    currentPeriodEnd: incoming.currentPeriodEnd || null,
   };
 }
 
@@ -269,6 +291,14 @@ function verifyPassword(password, account) {
   } catch {
     return false;
   }
+}
+
+function hashResetToken(token) {
+  return crypto.createHash("sha256").update(String(token || "")).digest("hex");
+}
+
+function resetTokenExpired(reset) {
+  return !reset?.expiresAt || new Date(reset.expiresAt).getTime() <= Date.now();
 }
 
 function sanitizeAccountProfile(input, type, existing = {}) {
@@ -291,6 +321,16 @@ function sanitizeAccountProfile(input, type, existing = {}) {
     photo: String(profile.photo || existing.photo || "").startsWith("data:image/") ? String(profile.photo || existing.photo || "") : "",
     photos: type === "hostel" ? photos.filter((photo) => String(photo || "").startsWith("data:image/")).slice(0, 10) : [],
     plan,
+    headline: type === "worker" ? String(profile.headline || existing.headline || "").trim() : "",
+    languages: type === "worker" ? normalizeList(profile.languages || existing.languages) : [],
+    previousHostels: type === "worker" ? normalizeList(profile.previousHostels || existing.previousHostels) : [],
+    experience: type === "worker" ? String(profile.experience || existing.experience || "").trim() : "",
+    education: type === "worker" ? String(profile.education || existing.education || "").trim() : "",
+    certifications: type === "worker" ? normalizeList(profile.certifications || existing.certifications) : [],
+    references: type === "worker" ? String(profile.references || existing.references || "").trim() : "",
+    preferredRegions: type === "worker" ? normalizeList(profile.preferredRegions || existing.preferredRegions) : [],
+    workStyle: type === "worker" ? String(profile.workStyle || existing.workStyle || "").trim() : "",
+    portfolio: type === "worker" ? String(profile.portfolio || existing.portfolio || "").trim() : "",
   };
 }
 
@@ -334,6 +374,49 @@ function publicAccount(account) {
     updatedAt: account.updatedAt,
     profile: account.profile || {},
     billing: account.billing || buildAccountBilling(account.type, account.profile?.plan || defaultAccountPlan(account.type)),
+    security: {
+      passwordLogin: Boolean(account.passwordHash),
+      canSendPasswordReset: true,
+    },
+  };
+}
+
+function toDbPasswordReset(reset) {
+  return {
+    id: reset.id,
+    account_id: reset.accountId,
+    email: reset.email,
+    token_hash: reset.tokenHash,
+    expires_at: reset.expiresAt,
+    used_at: reset.usedAt,
+    requested_by: reset.requestedBy,
+    requested_ip: reset.requestedIp,
+    created_at: reset.createdAt,
+  };
+}
+
+function fromDbPasswordReset(row) {
+  return {
+    id: row.id,
+    accountId: row.account_id,
+    email: row.email,
+    tokenHash: row.token_hash,
+    expiresAt: row.expires_at,
+    usedAt: row.used_at,
+    requestedBy: row.requested_by,
+    requestedIp: row.requested_ip,
+    createdAt: row.created_at,
+  };
+}
+
+function toDbAdminAction(action) {
+  return {
+    id: action.id,
+    action: action.action,
+    account_id: action.accountId,
+    target_email: action.targetEmail,
+    metadata: action.metadata || {},
+    created_at: action.createdAt,
   };
 }
 
@@ -423,6 +506,46 @@ function useSupabase() {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
+function productionRuntime() {
+  return Boolean(process.env.VERCEL || process.env.NODE_ENV === "production");
+}
+
+function temporaryAccountStorageAllowed() {
+  return process.env.ALLOW_TEMPORARY_ACCOUNT_STORAGE === "true" || !productionRuntime();
+}
+
+function exposeError(message, statusCode = 500) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  error.expose = true;
+  return error;
+}
+
+function handleAccountStorageFailure(area, error) {
+  const message = error?.message || "Unknown storage error";
+  if (!temporaryAccountStorageAllowed()) {
+    throw exposeError(
+      `${area} is not connected to permanent storage. Check Supabase before accepting or changing accounts.`,
+      503
+    );
+  }
+  console.warn(`${area} fallback: ${message}`);
+}
+
+function permanentAccountStorageReady() {
+  return useSupabase() || temporaryAccountStorageAllowed();
+}
+
+function accountStorageStatus() {
+  if (useSupabase()) return "supabase-permanent";
+  if (temporaryAccountStorageAllowed()) return "local-json-dev";
+  return "permanent-storage-required";
+}
+
+function paidSignupRequired() {
+  return process.env.REQUIRE_PAID_SIGNUP !== "false";
+}
+
 async function supabaseRequest(tableAndQuery, options = {}) {
   const baseUrl = process.env.SUPABASE_URL.replace(/\/$/, "");
   const response = await fetch(`${baseUrl}/rest/v1/${tableAndQuery}`, {
@@ -454,7 +577,7 @@ async function listAccounts() {
       const rows = await supabaseRequest("accounts?select=*&order=created_at.desc");
       return rows.map(fromDbAccount);
     } catch (error) {
-      console.warn(`Account storage fallback: ${error.message}`);
+      handleAccountStorageFailure("Account storage", error);
     }
   }
   return readJson(ACCOUNTS_FILE, []);
@@ -468,7 +591,7 @@ async function findAccountByEmail(email) {
       const rows = await supabaseRequest(`accounts?email=eq.${encodeURIComponent(normalized)}&select=*&limit=1`);
       return rows[0] ? fromDbAccount(rows[0]) : null;
     } catch (error) {
-      console.warn(`Account storage fallback: ${error.message}`);
+      handleAccountStorageFailure("Account storage", error);
     }
   }
   const accounts = await readJson(ACCOUNTS_FILE, []);
@@ -482,7 +605,7 @@ async function findAccountById(id) {
       const rows = await supabaseRequest(`accounts?id=eq.${encodeURIComponent(id)}&select=*&limit=1`);
       return rows[0] ? fromDbAccount(rows[0]) : null;
     } catch (error) {
-      console.warn(`Account storage fallback: ${error.message}`);
+      handleAccountStorageFailure("Account storage", error);
     }
   }
   const accounts = await readJson(ACCOUNTS_FILE, []);
@@ -499,7 +622,7 @@ async function saveAccount(account) {
       });
       return fromDbAccount(rows[0]);
     } catch (error) {
-      console.warn(`Account storage fallback: ${error.message}`);
+      handleAccountStorageFailure("Account storage", error);
     }
   }
   const accounts = await readJson(ACCOUNTS_FILE, []);
@@ -527,12 +650,100 @@ async function replaceAccount(id, updater) {
       });
       return fromDbAccount(rows[0]);
     } catch (error) {
-      console.warn(`Account storage fallback: ${error.message}`);
+      handleAccountStorageFailure("Account storage", error);
     }
   }
 
   await writeJson(ACCOUNTS_FILE, next);
   return updated;
+}
+
+async function savePasswordReset(reset) {
+  if (useSupabase()) {
+    try {
+      const rows = await supabaseRequest("password_resets", {
+        method: "POST",
+        headers: { prefer: "return=representation" },
+        body: JSON.stringify(toDbPasswordReset(reset)),
+      });
+      return fromDbPasswordReset(rows[0]);
+    } catch (error) {
+      handleAccountStorageFailure("Password reset storage", error);
+    }
+  }
+  const resets = await readJson(PASSWORD_RESETS_FILE, []);
+  const next = resets
+    .filter((item) => !resetTokenExpired(item) && !item.usedAt)
+    .concat(reset);
+  await writeJson(PASSWORD_RESETS_FILE, next);
+  return reset;
+}
+
+async function findPasswordResetByToken(token) {
+  const tokenHash = hashResetToken(token);
+  if (!token || !tokenHash) return null;
+  if (useSupabase()) {
+    try {
+      const rows = await supabaseRequest(`password_resets?token_hash=eq.${encodeURIComponent(tokenHash)}&select=*&limit=1`);
+      return rows[0] ? fromDbPasswordReset(rows[0]) : null;
+    } catch (error) {
+      handleAccountStorageFailure("Password reset storage", error);
+    }
+  }
+  const resets = await readJson(PASSWORD_RESETS_FILE, []);
+  return resets.find((reset) => reset.tokenHash === tokenHash) || null;
+}
+
+async function markPasswordResetUsed(id) {
+  const usedAt = new Date().toISOString();
+  if (useSupabase()) {
+    try {
+      const rows = await supabaseRequest(`password_resets?id=eq.${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { prefer: "return=representation" },
+        body: JSON.stringify({ used_at: usedAt }),
+      });
+      return rows[0] ? fromDbPasswordReset(rows[0]) : null;
+    } catch (error) {
+      handleAccountStorageFailure("Password reset storage", error);
+    }
+  }
+  const resets = await readJson(PASSWORD_RESETS_FILE, []);
+  let updated = null;
+  const next = resets.map((reset) => {
+    if (reset.id !== id) return reset;
+    updated = { ...reset, usedAt };
+    return updated;
+  });
+  await writeJson(PASSWORD_RESETS_FILE, next);
+  return updated;
+}
+
+async function logAdminAction({ action, accountId = null, targetEmail = "", metadata = {} }) {
+  const item = {
+    id: crypto.randomUUID(),
+    action: String(action || "admin_action"),
+    accountId,
+    targetEmail: normalizeEmail(targetEmail),
+    metadata,
+    createdAt: new Date().toISOString(),
+  };
+  if (useSupabase()) {
+    try {
+      await supabaseRequest("admin_actions", {
+        method: "POST",
+        headers: { prefer: "return=minimal" },
+        body: JSON.stringify(toDbAdminAction(item)),
+      });
+      return item;
+    } catch (error) {
+      console.warn(`Admin action storage fallback: ${error.message}`);
+    }
+  }
+  const actions = await readJson(ADMIN_ACTIONS_FILE, []);
+  actions.unshift(item);
+  await writeJson(ADMIN_ACTIONS_FILE, actions.slice(0, 1000));
+  return item;
 }
 
 async function saveSubmission(submission) {
@@ -635,18 +846,123 @@ async function addEmailOutbox(item) {
   await writeJson(EMAIL_OUTBOX_FILE, outbox);
 }
 
-async function stripeRequest(endpoint, body) {
-  const response = await fetch(`https://api.stripe.com/v1/${endpoint}`, {
-    method: "POST",
+async function stripeRequest(endpoint, body = {}, options = {}) {
+  if (!process.env.STRIPE_SECRET_KEY) throw new Error("Stripe is not configured yet.");
+  const method = options.method || "POST";
+  const url = new URL(`https://api.stripe.com/v1/${endpoint}`);
+  const request = {
+    method,
     headers: {
       authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`,
-      "content-type": "application/x-www-form-urlencoded",
     },
-    body: new URLSearchParams(body),
-  });
+  };
+  if (method === "GET") {
+    Object.entries(body || {}).forEach(([key, value]) => {
+      if (Array.isArray(value)) value.forEach((item) => url.searchParams.append(key, item));
+      else if (value !== undefined && value !== null) url.searchParams.set(key, value);
+    });
+  } else {
+    request.headers["content-type"] = "application/x-www-form-urlencoded";
+    request.body = new URLSearchParams(body);
+  }
+  const response = await fetch(url, request);
   const result = await response.json();
   if (!response.ok) throw new Error(result.error?.message || "Stripe request failed");
   return result;
+}
+
+async function retrieveStripeCheckoutSession(sessionId) {
+  const id = String(sessionId || "").trim();
+  if (!id || !id.startsWith("cs_")) return null;
+  return stripeRequest(`checkout/sessions/${encodeURIComponent(id)}`, { "expand[]": "subscription" }, { method: "GET" });
+}
+
+function stripeObjectId(value) {
+  if (!value) return null;
+  if (typeof value === "string") return value;
+  return value.id || null;
+}
+
+function stripePeriodEnd(subscription) {
+  if (!subscription || typeof subscription !== "object") return null;
+  const timestamp = subscription.current_period_end;
+  return timestamp ? new Date(timestamp * 1000).toISOString() : null;
+}
+
+function subscriptionHasPrice(subscription, priceId) {
+  if (!priceId) return false;
+  const items = Array.isArray(subscription?.items?.data) ? subscription.items.data : [];
+  return items.some((item) => item?.price?.id === priceId);
+}
+
+async function findStripeSubscriptionForAccount(account) {
+  const existingSubscriptionId = account.billing?.stripeSubscriptionId;
+  if (existingSubscriptionId) return { id: existingSubscriptionId };
+
+  const customerId = account.billing?.stripeCustomerId;
+  if (!customerId) return null;
+
+  const plan = account.billing?.plan || account.profile?.plan || defaultAccountPlan(account.type);
+  const expectedPriceId = planDetails(plan, account.type).stripePriceId;
+  const result = await stripeRequest(
+    "subscriptions",
+    {
+      customer: customerId,
+      status: "all",
+      limit: "10",
+      "expand[]": "data.items.data.price",
+    },
+    { method: "GET" }
+  );
+  const subscriptions = Array.isArray(result?.data) ? result.data : [];
+  const liveSubscriptions = subscriptions.filter((subscription) => !["canceled", "incomplete_expired"].includes(subscription.status));
+  return (
+    liveSubscriptions.find((subscription) => subscriptionHasPrice(subscription, expectedPriceId)) ||
+    liveSubscriptions.find((subscription) => ["active", "trialing", "past_due", "unpaid", "incomplete"].includes(subscription.status)) ||
+    liveSubscriptions[0] ||
+    null
+  );
+}
+
+function checkoutSessionEmail(session) {
+  return normalizeEmail(session?.customer_details?.email || session?.customer_email || "");
+}
+
+async function verifiedStripeBilling(type, email, plan, incoming = {}) {
+  const normalized = normalizedPlan(plan || incoming.plan, type);
+  const sessionId = incoming.stripeCheckoutSessionId || incoming.checkoutSessionId || incoming.sessionId;
+  if (!sessionId) {
+    if (paidSignupRequired()) throw new Error("Stripe success session is missing. Payment links must return session_id.");
+    return buildAccountBilling(type, normalized, incoming);
+  }
+  const session = await retrieveStripeCheckoutSession(sessionId);
+  if (!session) throw new Error("Stripe checkout session was not found.");
+  if (session.payment_status !== "paid" && session.status !== "complete") {
+    throw new Error("Stripe has not confirmed this payment yet.");
+  }
+  const paidEmail = checkoutSessionEmail(session);
+  if (paidEmail && email && paidEmail !== normalizeEmail(email)) {
+    throw new Error("Stripe payment email did not match the account email.");
+  }
+  const expectedPaymentLink = STRIPE_PAYMENT_LINK_IDS[normalized];
+  if (expectedPaymentLink && session.payment_link && session.payment_link !== expectedPaymentLink) {
+    throw new Error("Stripe payment did not match the selected Hoppers plan.");
+  }
+
+  const subscription = session.subscription && typeof session.subscription === "object" ? session.subscription : null;
+  return buildAccountBilling(type, normalized, {
+    ...incoming,
+    provider: "stripe",
+    status: "paid",
+    paidAt: incoming.paidAt || new Date().toISOString(),
+    stripeCustomerId: stripeObjectId(session.customer) || incoming.stripeCustomerId || null,
+    stripeCheckoutSessionId: session.id,
+    stripeSubscriptionId: stripeObjectId(session.subscription) || incoming.stripeSubscriptionId || null,
+    stripePaymentLinkId: stripeObjectId(session.payment_link) || incoming.stripePaymentLinkId || null,
+    subscriptionStatus: subscription?.status || incoming.subscriptionStatus || null,
+    cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end || incoming.cancelAtPeriodEnd),
+    currentPeriodEnd: stripePeriodEnd(subscription) || incoming.currentPeriodEnd || null,
+  });
 }
 
 async function createSignupCheckoutSession(req, submission) {
@@ -728,6 +1044,52 @@ async function handleStripeWebhook(req, res) {
       },
     }));
   }
+  if (event.type === "checkout.session.completed" && session?.id) {
+    const accounts = await listAccounts();
+    const account = accounts.find((item) => item.billing?.stripeCheckoutSessionId === session.id);
+    if (account) {
+      const subscription = session.subscription && typeof session.subscription === "object" ? session.subscription : null;
+      await replaceAccount(account.id, (current) => ({
+        ...current,
+        updatedAt: new Date().toISOString(),
+        billing: buildAccountBilling(current.type, current.billing?.plan || current.profile?.plan || defaultAccountPlan(current.type), {
+          ...(current.billing || {}),
+          provider: "stripe",
+          status: "paid",
+          paidAt: current.billing?.paidAt || new Date().toISOString(),
+          stripeCustomerId: stripeObjectId(session.customer) || current.billing?.stripeCustomerId || null,
+          stripeCheckoutSessionId: session.id,
+          stripeSubscriptionId: stripeObjectId(session.subscription) || current.billing?.stripeSubscriptionId || null,
+          stripePaymentLinkId: stripeObjectId(session.payment_link) || current.billing?.stripePaymentLinkId || null,
+          subscriptionStatus: subscription?.status || current.billing?.subscriptionStatus || null,
+          cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end || current.billing?.cancelAtPeriodEnd),
+          currentPeriodEnd: stripePeriodEnd(subscription) || current.billing?.currentPeriodEnd || null,
+        }),
+      }));
+    }
+  }
+  if ((event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") && session?.id) {
+    const subscription = session;
+    const accounts = await listAccounts();
+    const account = accounts.find((item) => item.billing?.stripeSubscriptionId === subscription.id);
+    if (account) {
+      await replaceAccount(account.id, (current) => ({
+        ...current,
+        updatedAt: new Date().toISOString(),
+        billing: buildAccountBilling(current.type, current.billing?.plan || current.profile?.plan || defaultAccountPlan(current.type), {
+          ...(current.billing || {}),
+          provider: "stripe",
+          status: event.type === "customer.subscription.deleted" ? "canceled" : subscription.cancel_at_period_end ? "canceling" : "paid",
+          subscriptionStatus: subscription.status || current.billing?.subscriptionStatus || null,
+          cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
+          canceledAt: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : current.billing?.canceledAt || null,
+          currentPeriodEnd: subscription.current_period_end
+            ? new Date(subscription.current_period_end * 1000).toISOString()
+            : current.billing?.currentPeriodEnd || null,
+        }),
+      }));
+    }
+  }
   json(res, 200, { received: true });
   return true;
 }
@@ -775,6 +1137,39 @@ async function queueEmail({ to, subject, body }) {
   }
   await addEmailOutbox(item);
   return item;
+}
+
+function passwordResetUrl(req, token) {
+  const origin = process.env.PUBLIC_BASE_URL || originFromReq(req);
+  return `${origin}/reset-password.html?token=${encodeURIComponent(token)}`;
+}
+
+async function createPasswordResetForAccount(req, account, requestedBy = "account") {
+  const token = crypto.randomBytes(32).toString("base64url");
+  const now = new Date();
+  const reset = await savePasswordReset({
+    id: crypto.randomUUID(),
+    accountId: account.id,
+    email: account.email,
+    tokenHash: hashResetToken(token),
+    expiresAt: new Date(now.getTime() + PASSWORD_RESET_TTL_MS).toISOString(),
+    usedAt: null,
+    requestedBy,
+    requestedIp: requestedBy === "account" ? clientIp(req) : "",
+    createdAt: now.toISOString(),
+  });
+  const link = passwordResetUrl(req, token);
+  const name = account.profile?.name || "there";
+  const email = await queueEmail({
+    to: account.email,
+    subject: "Reset your Hoppers password",
+    body:
+      `Hi ${name},\n\n` +
+      `Your Hoppers login email is ${account.email}.\n\n` +
+      `Use this secure link to set a new password:\n${link}\n\n` +
+      `This link expires in 1 hour and can only be used once. If you did not ask for this, you can ignore this email.`,
+  });
+  return { reset, resetUrl: link, email };
 }
 
 async function notifySubmission(submission) {
@@ -829,6 +1224,7 @@ async function handleApi(req, res, pathname) {
     json(res, 200, {
       authenticated: isAdmin(req),
       storage: useSupabase() ? "supabase" : "local-json",
+      accountStorage: accountStorageStatus(),
       payments: process.env.STRIPE_SECRET_KEY ? "stripe" : "local-demo",
       email: process.env.RESEND_API_KEY ? "resend" : "local-outbox",
     });
@@ -839,6 +1235,7 @@ async function handleApi(req, res, pathname) {
     json(res, 200, {
       ok: true,
       storage: useSupabase() ? "supabase" : "local-json",
+      accountStorage: accountStorageStatus(),
       payments: process.env.STRIPE_SECRET_KEY ? "stripe" : "pre-stripe",
       email: process.env.RESEND_API_KEY ? "resend" : "local-outbox",
     });
@@ -855,7 +1252,70 @@ async function handleApi(req, res, pathname) {
     return true;
   }
 
+  if (pathname === "/api/account/forgot" && req.method === "POST") {
+    if (!rateLimit(req, "account-forgot", 8, 15 * 60 * 1000)) {
+      json(res, 429, { error: "Too many reset requests. Try again later." });
+      return true;
+    }
+    const body = await readBody(req);
+    const email = normalizeEmail(body.email);
+    if (email && email.includes("@")) {
+      const account = await findAccountByEmail(email);
+      if (account) await createPasswordResetForAccount(req, account, "account");
+    }
+    json(res, 200, {
+      ok: true,
+      message: "If that email is on Hoppers, we sent the login email and password reset link.",
+    });
+    return true;
+  }
+
+  if (pathname === "/api/account/reset-password" && req.method === "POST") {
+    if (!rateLimit(req, "account-reset-password", 10, 15 * 60 * 1000)) {
+      json(res, 429, { error: "Too many reset attempts. Try again later." });
+      return true;
+    }
+    const body = await readBody(req);
+    const token = String(body.token || "").trim();
+    const password = String(body.password || "");
+    const reset = await findPasswordResetByToken(token);
+    if (!reset || reset.usedAt || resetTokenExpired(reset)) {
+      json(res, 400, { error: "This reset link is invalid or expired. Ask for a new reset email." });
+      return true;
+    }
+    if (password.length < 8) {
+      json(res, 400, { error: "Password must be at least 8 characters." });
+      return true;
+    }
+    const account = (await findAccountById(reset.accountId)) || (await findAccountByEmail(reset.email));
+    if (!account) {
+      json(res, 400, { error: "This account could not be found. Ask Hoppers support for help." });
+      return true;
+    }
+    const updated = await replaceAccount(account.id, (current) => ({
+      ...current,
+      ...hashPassword(password),
+      updatedAt: new Date().toISOString(),
+    }));
+    await markPasswordResetUsed(reset.id);
+    const sessionToken = createSignedToken({ purpose: "account", accountId: updated.id });
+    accountSessions.set(sessionToken, updated.id);
+    json(
+      res,
+      200,
+      await accountPayload(updated),
+      {
+        "set-cookie": `${ACCOUNT_COOKIE}=${encodeURIComponent(sessionToken)}; HttpOnly; SameSite=Lax; Path=/`,
+      }
+    );
+    return true;
+  }
+
   if (pathname === "/api/account/register" && req.method === "POST") {
+    if (!permanentAccountStorageReady()) {
+      json(res, 503, { error: "Permanent account storage is not connected yet. Add Supabase before accepting new paid accounts." });
+      return true;
+    }
     if (!rateLimit(req, "account-register", 10, 60 * 60 * 1000)) {
       json(res, 429, { error: "Too many account attempts. Try again later." });
       return true;
@@ -865,7 +1325,6 @@ async function handleApi(req, res, pathname) {
     const email = normalizeEmail(body.email);
     const password = String(body.password || "");
     const profile = sanitizeAccountProfile(body.profile || body, type);
-    const billing = buildAccountBilling(type, profile.plan || body.billing?.plan || defaultAccountPlan(type), body.billing || {});
     if (!email || !email.includes("@")) {
       json(res, 400, { error: "Enter a valid email address." });
       return true;
@@ -880,6 +1339,17 @@ async function handleApi(req, res, pathname) {
     }
     if (await findAccountByEmail(email)) {
       json(res, 409, { error: "An account already exists for that email." });
+      return true;
+    }
+    let billing;
+    try {
+      billing = await verifiedStripeBilling(type, email, profile.plan || body.billing?.plan || defaultAccountPlan(type), body.billing || {});
+    } catch (error) {
+      json(res, 402, { error: error.message || "Stripe payment could not be verified." });
+      return true;
+    }
+    if (paidSignupRequired() && billing.status !== "paid") {
+      json(res, 402, { error: "A verified Stripe payment is required before Hoppers creates this account." });
       return true;
     }
     const now = new Date().toISOString();
@@ -962,6 +1432,81 @@ async function handleApi(req, res, pathname) {
       };
     });
     json(res, 200, await accountPayload(updated));
+    return true;
+  }
+
+  if (pathname === "/api/account/billing-portal" && req.method === "POST") {
+    const account = await accountFromRequest(req);
+    if (!account) {
+      json(res, 401, { error: "Account login required." });
+      return true;
+    }
+    const customerId = account.billing?.stripeCustomerId;
+    if (!customerId) {
+      json(res, 409, { error: "This account is not connected to a Stripe customer yet." });
+      return true;
+    }
+    try {
+      const origin = process.env.PUBLIC_BASE_URL || originFromReq(req);
+      const session = await stripeRequest("billing_portal/sessions", {
+        customer: customerId,
+        return_url: `${origin}/account.html?billing=updated`,
+      });
+      json(res, 200, { url: session.url });
+    } catch (error) {
+      json(res, 502, { error: error.message || "Could not open Stripe billing portal." });
+    }
+    return true;
+  }
+
+  if (pathname === "/api/account/cancel-membership" && req.method === "POST") {
+    const account = await accountFromRequest(req);
+    if (!account) {
+      json(res, 401, { error: "Account login required." });
+      return true;
+    }
+    const body = await readBody(req);
+    if (body.confirm !== true) {
+      json(res, 400, { error: "Confirm cancellation before canceling membership." });
+      return true;
+    }
+    try {
+      const matchedSubscription = await findStripeSubscriptionForAccount(account);
+      const subscriptionId = matchedSubscription?.id;
+      if (!subscriptionId) {
+        json(res, 409, { error: "This account does not have an active Stripe subscription connected yet." });
+        return true;
+      }
+      const subscription = await stripeRequest(`subscriptions/${encodeURIComponent(subscriptionId)}`, {
+        cancel_at_period_end: "true",
+      });
+      const updated = await replaceAccount(account.id, (current) => ({
+        ...current,
+        updatedAt: new Date().toISOString(),
+        billing: buildAccountBilling(current.type, current.billing?.plan || current.profile?.plan || defaultAccountPlan(current.type), {
+          ...(current.billing || {}),
+          provider: "stripe",
+          status: "canceling",
+          stripeSubscriptionId: subscription.id || subscriptionId,
+          subscriptionStatus: subscription.status || current.billing?.subscriptionStatus || null,
+          cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
+          canceledAt: subscription.canceled_at ? new Date(subscription.canceled_at * 1000).toISOString() : current.billing?.canceledAt || null,
+          currentPeriodEnd: subscription.current_period_end
+            ? new Date(subscription.current_period_end * 1000).toISOString()
+            : current.billing?.currentPeriodEnd || null,
+        }),
+      }));
+      json(res, 200, {
+        ...(await accountPayload(updated)),
+        cancellation: {
+          status: subscription.status,
+          cancelAtPeriodEnd: Boolean(subscription.cancel_at_period_end),
+          currentPeriodEnd: updated.billing?.currentPeriodEnd || null,
+        },
+      });
+    } catch (error) {
+      json(res, 502, { error: error.message || "Could not cancel Stripe subscription." });
+    }
     return true;
   }
 
@@ -1054,6 +1599,39 @@ async function handleApi(req, res, pathname) {
     return true;
   }
 
+  const accountResetMatch = pathname.match(/^\/api\/admin\/accounts\/([^/]+)\/password-reset$/);
+  if (accountResetMatch && req.method === "POST") {
+    if (!isAdmin(req)) {
+      json(res, 401, { error: "Admin login required" });
+      return true;
+    }
+    const account = await findAccountById(decodeURIComponent(accountResetMatch[1]));
+    if (!account) {
+      json(res, 404, { error: "Account not found" });
+      return true;
+    }
+    const result = await createPasswordResetForAccount(req, account, "admin");
+    await logAdminAction({
+      action: "password_reset_sent",
+      accountId: account.id,
+      targetEmail: account.email,
+      metadata: {
+        emailStatus: result.email?.status || "queued",
+        resetId: result.reset?.id || null,
+      },
+    });
+    json(res, 200, {
+      ok: true,
+      email: account.email,
+      emailStatus: result.email?.status || "queued",
+      resetUrl: process.env.RESEND_API_KEY ? null : result.resetUrl,
+      message: process.env.RESEND_API_KEY
+        ? "Password reset email sent."
+        : "Email service is not connected; the reset link is saved in the local outbox and shown here for testing.",
+    });
+    return true;
+  }
+
   const accountStatusMatch = pathname.match(/^\/api\/admin\/accounts\/([^/]+)\/status$/);
   if (accountStatusMatch && req.method === "PATCH") {
     if (!isAdmin(req)) {
@@ -1089,6 +1667,12 @@ async function handleApi(req, res, pathname) {
       json(res, 404, { error: "Account not found" });
       return true;
     }
+    await logAdminAction({
+      action: "account_status_changed",
+      accountId: updated.id,
+      targetEmail: updated.email,
+      metadata: { status },
+    });
     json(res, 200, { account: publicAccount(updated) });
     return true;
   }
@@ -1251,7 +1835,9 @@ async function handleRequest(req, res) {
     await serveStatic(req, res, url.pathname);
   } catch (error) {
     console.error(error);
-    json(res, 500, { error: "Server error" });
+    json(res, error.statusCode || 500, {
+      error: error.expose ? error.message : "Server error",
+    });
   }
 }
 

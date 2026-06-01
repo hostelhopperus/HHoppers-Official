@@ -216,6 +216,8 @@ function accountRows(account) {
     ["Monthly after approval", `$${payment.monthlyFee}/month`],
     ["Billing status", statusLabel(payment.status)],
     ["Payment mode", payment.provider],
+    ["Password storage", account.security?.passwordLogin ? "Hashed and hidden" : "Not set"],
+    ["Admin access", "Send reset link without viewing the password"],
   ]);
 }
 
@@ -307,6 +309,7 @@ function renderAccounts() {
                           <button type="button" data-account-action="approved" data-id="${escapeHtml(worker.id)}">Approve</button>
                           <button type="button" data-account-action="rejected" data-id="${escapeHtml(worker.id)}">Reject</button>
                           <button type="button" data-account-action="profile_draft" data-id="${escapeHtml(worker.id)}">Draft</button>
+                          <button type="button" data-account-reset data-id="${escapeHtml(worker.id)}">Send reset link</button>
                         </div>
                       </details>
                     </td>
@@ -363,6 +366,7 @@ function renderHostelAccounts() {
                           <button type="button" data-${hostel.actionType}-action="approved" data-id="${escapeHtml(hostel.id)}">Approve</button>
                           <button type="button" data-${hostel.actionType}-action="rejected" data-id="${escapeHtml(hostel.id)}">Reject</button>
                           <button type="button" data-${hostel.actionType}-action="${hostel.actionType === "account" ? "profile_draft" : "pending"}" data-id="${escapeHtml(hostel.id)}">${hostel.actionType === "account" ? "Draft" : "Pending"}</button>
+                          ${hostel.actionType === "account" ? `<button type="button" data-account-reset data-id="${escapeHtml(hostel.id)}">Send reset link</button>` : ""}
                         </div>
                       </details>
                     </td>
@@ -468,11 +472,53 @@ async function updateAccountStatus(button) {
   }
 }
 
+function showResetResult(button, result) {
+  const actions = button.closest(".sheet-actions");
+  if (!actions) return;
+  let note = actions.querySelector(".reset-result");
+  if (!note) {
+    note = document.createElement("p");
+    note.className = "reset-result";
+    actions.append(note);
+  }
+  note.innerHTML = result.resetUrl
+    ? `Email service is not connected yet. Test link: <a href="${escapeHtml(result.resetUrl)}">${escapeHtml(result.resetUrl)}</a>`
+    : `Reset email sent to ${escapeHtml(result.email || "this account")}.`;
+}
+
+async function sendAccountReset(button) {
+  if (!button) return;
+  button.disabled = true;
+  try {
+    const result = await fetchJson(`/api/admin/accounts/${encodeURIComponent(button.dataset.id)}/password-reset`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    });
+    showResetResult(button, result);
+    showToast(result.resetUrl ? "Reset link ready for testing." : "Password reset email sent.");
+  } catch (error) {
+    showToast(error.message || "Could not send reset link.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
 accountReviewList.addEventListener("click", async (event) => {
+  const resetButton = event.target.closest("[data-account-reset]");
+  if (resetButton) {
+    await sendAccountReset(resetButton);
+    return;
+  }
   await updateAccountStatus(event.target.closest("[data-account-action]"));
 });
 
 submissionList.addEventListener("click", async (event) => {
+  const resetButton = event.target.closest("[data-account-reset]");
+  if (resetButton) {
+    await sendAccountReset(resetButton);
+    return;
+  }
+
   const accountButton = event.target.closest("[data-account-action]");
   if (accountButton) {
     await updateAccountStatus(accountButton);
@@ -527,4 +573,3 @@ logoutButton.addEventListener("click", async () => {
   loginSection.hidden = false;
   adminCode.value = "";
 });
-
