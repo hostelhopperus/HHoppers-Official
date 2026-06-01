@@ -10,6 +10,8 @@ const viewButtons = document.querySelectorAll("[data-view]");
 const seedDemoButton = document.querySelector("#seed-demo");
 const logoutButton = document.querySelector("#logout-admin");
 const clearRejectedButton = document.querySelector("#clear-rejected");
+const recoverPaidForm = document.querySelector("#recover-paid-form");
+const recoverPaidResult = document.querySelector("#recover-paid-result");
 
 let activeFilter = "all";
 let activeView = "accounts";
@@ -101,6 +103,20 @@ function paymentRecord(type, plan, payment = {}) {
     status: payment.status || payment.monthlyStatus || "billing_setup_after_approval",
     provider: payment.provider || "local-demo",
   };
+}
+
+function syncRecoveryPlanOptions() {
+  if (!recoverPaidForm) return;
+  const type = recoverPaidForm.elements.type.value;
+  const planSelect = recoverPaidForm.elements.plan;
+  planSelect.querySelectorAll('option[value^="worker-"]').forEach((option) => {
+    option.disabled = type === "hostel";
+  });
+  planSelect.querySelectorAll('option[value^="hostel-"]').forEach((option) => {
+    option.disabled = type !== "hostel";
+  });
+  if (type === "worker" && !planSelect.value.startsWith("worker-")) planSelect.value = "worker-basic";
+  if (type === "hostel" && !planSelect.value.startsWith("hostel-")) planSelect.value = "hostel-basic";
 }
 
 function splitLocation(value) {
@@ -522,6 +538,39 @@ async function sendAccountReset(button) {
   }
 }
 
+recoverPaidForm?.elements.type.addEventListener("change", syncRecoveryPlanOptions);
+
+recoverPaidForm?.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const formData = new FormData(recoverPaidForm);
+  const button = recoverPaidForm.querySelector('button[type="submit"]');
+  button.disabled = true;
+  recoverPaidResult.textContent = "Checking Stripe...";
+  try {
+    const result = await fetchJson("/api/admin/accounts/recover-paid", {
+      method: "POST",
+      body: JSON.stringify({
+        type: formData.get("type"),
+        plan: formData.get("plan"),
+        email: String(formData.get("email") || "").trim(),
+        name: String(formData.get("name") || "").trim(),
+        password: formData.get("password"),
+        stripeCheckoutSessionId: String(formData.get("stripeCheckoutSessionId") || "").trim(),
+      }),
+    });
+    recoverPaidResult.textContent = `${result.account?.email || "Account"} recovered. They can sign in with the temporary password.`;
+    recoverPaidForm.reset();
+    syncRecoveryPlanOptions();
+    await refreshDashboard();
+    showToast("Paid account recovered.");
+  } catch (error) {
+    recoverPaidResult.textContent = error.message || "Could not recover account.";
+    showToast(error.message || "Could not recover account.");
+  } finally {
+    button.disabled = false;
+  }
+});
+
 accountReviewList.addEventListener("click", async (event) => {
   const resetButton = event.target.closest("[data-account-reset]");
   if (resetButton) {
@@ -596,3 +645,5 @@ logoutButton.addEventListener("click", async () => {
   loginSection.hidden = false;
   adminCode.value = "";
 });
+
+syncRecoveryPlanOptions();
