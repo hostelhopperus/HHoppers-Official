@@ -150,6 +150,22 @@ async function fetchJson(url, options = {}) {
   return body;
 }
 
+async function savePendingSignup(signup) {
+  const response = await fetchJson("/api/account/pending-signup", {
+    method: "POST",
+    body: JSON.stringify(signup),
+  });
+  const pending = {
+    ...signup,
+    email: response.account?.email || signup.email,
+    accountId: response.accountId || response.account?.id || "",
+    clientReferenceId: response.clientReferenceId || signup.clientReferenceId,
+    paymentPage: response.paymentPage || paymentPages[signup.plan] || "./payment.html",
+  };
+  sessionStorage.setItem("hoppersPendingAccount", JSON.stringify(pending));
+  return pending;
+}
+
 function syncPlanOptions() {
   const currentPlan = createProfileForm.elements.plan.value;
   const availablePlans = Object.entries(signupPlans).filter(([, plan]) => plan.type === selectedType);
@@ -302,7 +318,7 @@ createProfileForm.addEventListener("submit", async (event) => {
     const plan = profile.plan;
     const email = String(formData.get("email") || "").trim();
     const clientReferenceId = createClientReferenceId();
-    sessionStorage.setItem("hoppersPendingAccount", JSON.stringify({
+    const pending = await savePendingSignup({
       type: selectedType,
       email,
       password: formData.get("password"),
@@ -310,10 +326,10 @@ createProfileForm.addEventListener("submit", async (event) => {
       plan,
       clientReferenceId,
       startedAt: new Date().toISOString(),
-    }));
+    });
     showToast("Opening payment page...");
     window.setTimeout(() => {
-      window.location.href = paymentPages[plan] || "./payment.html";
+      window.location.href = pending.paymentPage || paymentPages[plan] || "./payment.html";
     }, 350);
   } catch (error) {
     showToast(error.message || "Could not prepare payment.");
