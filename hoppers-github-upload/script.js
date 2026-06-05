@@ -64,6 +64,10 @@ const hostelProfiles = [
 const samplePilotOpenings = [
   {
     name: "Reception Helper",
+    role: "Reception Helper",
+    hostelName: "Sample Lisbon Hostel",
+    city: "Lisbon",
+    country: "Portugal",
     location: "Lisbon, Portugal",
     needs: ["Reception", "Guest support"],
     startMonth: "July 2026",
@@ -72,6 +76,9 @@ const samplePilotOpenings = [
     housing: "Bed included",
     meals: "Breakfast included",
     type: "Work exchange",
+    languages: ["English"],
+    minimumStay: "4-8 weeks",
+    minimumStayWeeks: 4,
     stay: "July 2026, 4-8 weeks",
     benefits: "Bed + breakfast",
     details: "Sample pilot listing for reception and guest support.",
@@ -80,6 +87,10 @@ const samplePilotOpenings = [
   },
   {
     name: "Social Events Crew",
+    role: "Social Events Crew",
+    hostelName: "Sample Costa Rica Hostel",
+    city: "Costa Rica",
+    country: "Costa Rica",
     location: "Costa Rica",
     needs: ["Events", "Guest experience"],
     startMonth: "August 2026",
@@ -88,6 +99,9 @@ const samplePilotOpenings = [
     housing: "Dorm bed included",
     meals: "Confirm with hostel",
     type: "Work exchange",
+    languages: ["English", "Spanish helpful"],
+    minimumStay: "1-3 months",
+    minimumStayWeeks: 4,
     stay: "August 2026, 1-3 months",
     benefits: "Dorm bed",
     details: "Sample pilot listing for social events and guest energy.",
@@ -96,6 +110,10 @@ const samplePilotOpenings = [
   },
   {
     name: "Surf Hostel All-Rounder",
+    role: "Surf Hostel All-Rounder",
+    hostelName: "Sample Surf Hostel",
+    city: "Ericeira",
+    country: "Portugal",
     location: "Ericeira, Portugal",
     needs: ["Reception", "Cleaning", "Events"],
     startMonth: "June 2026",
@@ -104,6 +122,9 @@ const samplePilotOpenings = [
     housing: "Bed included",
     meals: "Confirm with hostel",
     type: "Paid + housing",
+    languages: ["English", "Portuguese helpful"],
+    minimumStay: "6-10 weeks",
+    minimumStayWeeks: 6,
     stay: "June 2026, 6-10 weeks",
     benefits: "Paid + housing",
     details: "Sample pilot listing for an all-rounder at a surf hostel.",
@@ -112,6 +133,10 @@ const samplePilotOpenings = [
   },
   {
     name: "Night Reception",
+    role: "Night Reception",
+    hostelName: "Sample Amsterdam Hostel",
+    city: "Amsterdam",
+    country: "Netherlands",
     location: "Amsterdam, Netherlands",
     needs: ["Reception", "Night shift"],
     startMonth: "September 2026",
@@ -120,6 +145,9 @@ const samplePilotOpenings = [
     housing: "Staff room included",
     meals: "Confirm with hostel",
     type: "Paid",
+    languages: ["English", "Dutch helpful"],
+    minimumStay: "2-4 months",
+    minimumStayWeeks: 8,
     stay: "September 2026, 2-4 months",
     benefits: "Paid role, staff room",
     details: "Sample pilot listing for night reception support.",
@@ -128,6 +156,10 @@ const samplePilotOpenings = [
   },
   {
     name: "Housekeeping & Breakfast Support",
+    role: "Housekeeping & Breakfast Support",
+    hostelName: "Sample Queenstown Hostel",
+    city: "Queenstown",
+    country: "New Zealand",
     location: "Queenstown, New Zealand",
     needs: ["Housekeeping", "Breakfast", "Cleaning"],
     startMonth: "November 2026",
@@ -136,6 +168,9 @@ const samplePilotOpenings = [
     housing: "Bed included",
     meals: "Breakfast included",
     type: "Exchange",
+    languages: ["English"],
+    minimumStay: "2-3 months",
+    minimumStayWeeks: 8,
     stay: "November 2026, 2-3 months",
     benefits: "Bed + breakfast",
     details: "Sample pilot listing for housekeeping and breakfast support.",
@@ -144,6 +179,10 @@ const samplePilotOpenings = [
   },
   {
     name: "Bar / Events Assistant",
+    role: "Bar / Events Assistant",
+    hostelName: "Sample Budapest Hostel",
+    city: "Budapest",
+    country: "Hungary",
     location: "Budapest, Hungary",
     needs: ["Bar", "Events"],
     startMonth: "July 2026",
@@ -152,6 +191,9 @@ const samplePilotOpenings = [
     housing: "Dorm bed included",
     meals: "Confirm with hostel",
     type: "Paid trial / exchange",
+    languages: ["English"],
+    minimumStay: "1-2 months",
+    minimumStayWeeks: 4,
     stay: "July 2026, 1-2 months",
     benefits: "Dorm bed, paid trial / exchange",
     details: "Sample pilot listing for bar and events support.",
@@ -221,10 +263,42 @@ function tagList(items) {
 
 function openingLink(profile) {
   const params = new URLSearchParams({
-    name: profile.name || "",
+    name: profile.role || profile.name || "",
     location: profile.location || "",
   });
   return `./opening-apply.html?${params.toString()}`;
+}
+
+function normalizeOpening(profile = {}) {
+  const location = profile.location || [profile.city, profile.country].filter(Boolean).join(", ") || "Location pending";
+  const parts = String(location)
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  const role = profile.role || profile.roleNeeded || profile.name || valuesList(profile.needs || profile.roles)[0];
+  const type = profile.compensation || profile.type || "Confirm with hostel";
+  return {
+    ...profile,
+    name: profile.name || role,
+    role,
+    hostelName: profile.hostelName || profile.hostel || (profile.sample ? "Sample pilot hostel" : profile.name || "Hostel"),
+    location,
+    city: profile.city || (parts.length > 1 ? parts.slice(0, -1).join(", ") : parts[0] || ""),
+    country: profile.country || (parts.length > 1 ? parts.at(-1) : ""),
+    roles: valuesList(profile.roles || profile.needs || role),
+    startMonth: profile.startMonth || formatDateOnly(profile.startDate) || "Flexible",
+    minimumStay: profile.minimumStay || profile.duration || profile.stay || "Flexible",
+    minimumStayWeeks: Number(profile.minimumStayWeeks || 0),
+    hoursPerWeek: profile.hoursPerWeek || profile.hours || "Confirm with hostel",
+    housingIncluded: Boolean(profile.housingIncluded || /bed|housing|room|dorm/i.test(profile.housing || profile.benefits || "")),
+    mealsIncluded: Boolean(profile.mealsIncluded || /breakfast|meal/i.test(profile.meals || profile.benefits || "")),
+    housing: profile.housing || "Confirm with hostel",
+    meals: profile.meals || "Confirm with hostel",
+    compensation: type,
+    type,
+    languages: valuesList(profile.languages || profile.languageRequirements, "Confirm with hostel"),
+    pilot: Boolean(profile.pilot || profile.sample || String(profile.status || "").toLowerCase().includes("pilot")),
+  };
 }
 
 function renderWorker(profile) {
@@ -292,51 +366,35 @@ function renderHostel(profile) {
 }
 
 function renderOpening(profile) {
-  const isDetailed = profile.startMonth || profile.duration || profile.hours || profile.type;
+  const opening = normalizeOpening(profile);
   return `
     <article class="profile-card opening-card">
       <div class="profile-card-inner">
         <div class="profile-top">
           <div>
-            <h3>${escapeHtml(profile.name)}</h3>
-            <p class="location">+ ${escapeHtml(profile.location)}</p>
+            <h3>${escapeHtml(opening.role)}</h3>
+            <p class="location">+ ${escapeHtml(opening.hostelName)} · ${escapeHtml(opening.location)}</p>
           </div>
-          <span class="badge">${profile.sample ? "Sample pilot listing" : profile.verified ? "Approved" : "Reviewing"}</span>
+          <span class="badge">${opening.pilot ? "Pilot listing" : opening.verified ? "Approved" : "Reviewing"}</span>
         </div>
-        <div class="profile-meta">
-          ${
-            isDetailed
-              ? `
-                <div><span class="label">Start</span><p>${escapeHtml(profile.startMonth || "Flexible")}</p></div>
-                <div><span class="label">Duration</span><p>${escapeHtml(profile.duration || profile.stay || "Flexible")}</p></div>
-                <div><span class="label">Hours</span><p>${escapeHtml(profile.hours || "Confirm with hostel")}</p></div>
-                <div><span class="label">Housing</span><p>${escapeHtml(profile.housing || "Confirm with hostel")}</p></div>
-                <div><span class="label">Meals</span><p>${escapeHtml(profile.meals || "Confirm with hostel")}</p></div>
-                <div><span class="label">Type</span><p>${escapeHtml(profile.type || "Confirm with hostel")}</p></div>
-              `
-              : `
-                <div>
-                  <span class="label">Opening window</span>
-                  <p>${escapeHtml(profile.stay)}</p>
-                </div>
-                <div>
-                  <span class="label">Roles open</span>
-                  <div class="tag-list">${tagList(profile.needs)}</div>
-                </div>
-                <div>
-                  <span class="label">Placement details</span>
-                  <p>${escapeHtml(profile.benefits)}</p>
-                </div>
-              `
-          }
+        <div class="profile-meta listing-meta-grid">
+          <div><span class="label">Start</span><p>${escapeHtml(opening.startMonth)}</p></div>
+          <div><span class="label">Minimum stay</span><p>${escapeHtml(opening.minimumStay)}</p></div>
+          <div><span class="label">Hours/week</span><p>${escapeHtml(opening.hoursPerWeek)}</p></div>
+          <div><span class="label">Housing</span><p>${escapeHtml(opening.housingIncluded ? "Yes" : opening.housing)}</p></div>
+          <div><span class="label">Meals</span><p>${escapeHtml(opening.mealsIncluded ? "Yes" : opening.meals)}</p></div>
+          <div><span class="label">Type</span><p>${escapeHtml(opening.compensation)}</p></div>
+          <div><span class="label">Languages</span><p>${escapeHtml(opening.languages.join(", "))}</p></div>
+          <div><span class="label">Roles</span><div class="tag-list">${tagList(opening.roles)}</div></div>
         </div>
-        <a class="opening-link" href="${escapeHtml(openingLink(profile))}">Apply</a>
+        <a class="opening-link" href="${escapeHtml(openingLink(opening))}">Apply</a>
       </div>
     </article>
   `;
 }
 
 function openingCountry(profile) {
+  if (profile.country) return profile.country;
   const parts = String(profile.location || "").split(",");
   return (parts[parts.length - 1] || "").trim();
 }
@@ -352,16 +410,40 @@ function openingMatchesDates(profile, startDate, endDate) {
 }
 
 function submissionToHostel(submission) {
+  const data = submission.data || {};
+  const location = data.location || "Location pending";
+  const parts = String(location)
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
   return {
-    name: submission.data.name || "Approved hostel",
-    location: submission.data.location || "Location pending",
-    needs: valuesList(submission.data.roles || submission.data.role),
-    startDate: submission.data.startDate || "",
-    endDate: submission.data.endDate || "",
-    stay: dateRange(submission.data.startDate, submission.data.endDate),
-    benefits: submission.data.description || "Details available after approval",
-    details: submission.data.description || "More details will be shared after the hostel review is complete.",
+    id: submission.id,
+    source: submission.source || "submission",
+    hostelAccountId: submission.source === "account" ? submission.id : "",
+    hostelEmail: data.email || "",
+    name: data.role || valuesList(data.roles || data.role)[0] || "Hostel role",
+    role: data.role || valuesList(data.roles || data.role)[0] || "Hostel role",
+    hostelName: data.name || "Approved hostel",
+    location,
+    city: data.city || (parts.length > 1 ? parts.slice(0, -1).join(", ") : parts[0] || ""),
+    country: data.country || (parts.length > 1 ? parts.at(-1) : ""),
+    needs: valuesList(data.roles || data.role),
+    roles: valuesList(data.roles || data.role),
+    startDate: data.startDate || "",
+    endDate: data.endDate || "",
+    startMonth: data.startMonth || formatDateOnly(data.startDate) || "Flexible",
+    minimumStay: data.minimumStay || data.duration || dateRange(data.startDate, data.endDate),
+    minimumStayWeeks: Number(data.minimumStayWeeks || 0),
+    hoursPerWeek: data.hoursPerWeek || data.hours || "Confirm with hostel",
+    housingIncluded: Boolean(data.housingIncluded),
+    mealsIncluded: Boolean(data.mealsIncluded),
+    compensation: data.compensation || data.type || "Confirm with hostel",
+    languages: valuesList(data.languages || data.languageRequirements, "Confirm with hostel"),
+    stay: dateRange(data.startDate, data.endDate),
+    benefits: data.description || "Details available after approval",
+    details: data.description || "More details will be shared after the hostel review is complete.",
     verified: true,
+    pilot: Boolean(data.pilot),
   };
 }
 
@@ -380,12 +462,19 @@ function filterOpenings(openings, form) {
   const country = String(formData.get("country") || "");
   const startDate = String(formData.get("startDate") || "");
   const endDate = String(formData.get("endDate") || "");
+  const housingIncluded = Boolean(formData.get("housingIncluded"));
+  const type = String(formData.get("type") || "").toLowerCase();
+  const minimumStayWeeks = Number(formData.get("minimumStayWeeks") || 0);
   return openings.filter((opening) => {
+    const normalized = normalizeOpening(opening);
     const roleMatches =
       !roles.length ||
-      roles.some((role) => opening.needs.some((item) => item.toLowerCase() === role || item.toLowerCase().includes(role)));
-    const countryMatches = !country || openingCountry(opening) === country;
-    return roleMatches && countryMatches && openingMatchesDates(opening, startDate, endDate);
+      roles.some((role) => normalized.roles.some((item) => item.toLowerCase() === role || item.toLowerCase().includes(role)));
+    const countryMatches = !country || openingCountry(normalized) === country;
+    const housingMatches = !housingIncluded || Boolean(normalized.housingIncluded);
+    const typeMatches = !type || String(normalized.compensation || normalized.type || "").toLowerCase().includes(type);
+    const stayMatches = !minimumStayWeeks || !normalized.minimumStayWeeks || Number(normalized.minimumStayWeeks) <= minimumStayWeeks;
+    return roleMatches && countryMatches && housingMatches && typeMatches && stayMatches && openingMatchesDates(normalized, startDate, endDate);
   });
 }
 
@@ -414,14 +503,14 @@ async function renderPublicOpenings() {
       const filtered = filterOpenings(openings, publicOpeningFilters);
       publicOpeningGrid.innerHTML = filtered.length
         ? filtered.map(renderOpening).join("")
-        : `<p class="empty-state">Real approved hostel openings will appear here as the pilot opens.</p>`;
+        : `<p class="empty-state">Pilot listings opening soon — join the worker list to get first access.</p>`;
     };
     publicOpeningFilters.addEventListener("input", renderFiltered);
     publicOpeningFilters.addEventListener("change", renderFiltered);
     renderFiltered();
   } catch {
     populatePublicOpeningCountries([]);
-    publicOpeningGrid.innerHTML = `<p class="empty-state">Real approved hostel openings will appear here as the pilot opens.</p>`;
+    publicOpeningGrid.innerHTML = `<p class="empty-state">Pilot listings opening soon — join the worker list to get first access.</p>`;
   }
 }
 

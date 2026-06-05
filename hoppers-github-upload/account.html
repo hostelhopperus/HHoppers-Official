@@ -10,7 +10,7 @@
     <title>Hoppers Account</title>
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./assets/icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=30" />
+    <link rel="stylesheet" href="./styles.css?v=31" />
   </head>
   <body class="account-page">
     <header class="site-header">
@@ -258,6 +258,7 @@
                 </div>
                 <a class="button button-light" href="./communications.html">Open communications</a>
               </div>
+              <div id="worker-profile-strength"></div>
               <div class="account-landing-grid">
                 <article>
                   <p class="eyebrow">Applications sent</p>
@@ -278,6 +279,7 @@
                 </div>
                 <a class="button button-light" href="./communications.html">Open communications</a>
               </div>
+              <div id="hostel-verification-badges" class="verification-badge-row"></div>
               <div id="hostel-application-review-list" class="hostel-review-list"></div>
             </section>
 
@@ -384,6 +386,10 @@
                   <span>References</span>
                   <textarea name="references" placeholder="Reference names, contact notes, or 'available on request'"></textarea>
                 </label>
+                <label class="checkbox-line worker-depth-field">
+                  <input name="workEligibilityAcknowledged" type="checkbox" />
+                  <span>I understand I am responsible for confirming visa and work eligibility before accepting a role.</span>
+                </label>
                 <textarea name="bio"></textarea>
                 <button class="button button-dark" type="submit">Save profile</button>
               </form>
@@ -439,6 +445,30 @@
                 <label>
                   <span>Country</span>
                   <select name="country" data-opening-country></select>
+                </label>
+                <label>
+                  <span>Paid / exchange</span>
+                  <select name="type">
+                    <option value="">Any type</option>
+                    <option value="paid">Paid</option>
+                    <option value="exchange">Exchange</option>
+                    <option value="volunteer">Volunteer</option>
+                    <option value="mixed">Mixed</option>
+                  </select>
+                </label>
+                <label>
+                  <span>Minimum stay I can do</span>
+                  <select name="minimumStayWeeks">
+                    <option value="">Any stay</option>
+                    <option value="4">4+ weeks</option>
+                    <option value="6">6+ weeks</option>
+                    <option value="8">2+ months</option>
+                    <option value="12">3+ months</option>
+                  </select>
+                </label>
+                <label class="checkbox-line">
+                  <input name="housingIncluded" type="checkbox" />
+                  <span>Housing included</span>
                 </label>
               </form>
               <div id="account-opening-grid" class="account-opening-grid" aria-live="polite"></div>
@@ -518,7 +548,7 @@
     </footer>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="./account.js?v=23"></script>
+    <script src="./account.js?v=24"></script>
     <script src="./site.js?v=1"></script>
     <script src="./app.js?v=1"></script>
   </body>

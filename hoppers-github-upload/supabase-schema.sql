@@ -70,17 +70,42 @@ create table if not exists public.admin_actions (
 create index if not exists admin_actions_account_idx on public.admin_actions (account_id);
 create index if not exists admin_actions_created_at_idx on public.admin_actions (created_at desc);
 
+create table if not exists public.applications (
+  id uuid primary key,
+  status text not null default 'applied' check (status in ('applied', 'viewed', 'shortlisted', 'contacted', 'interview', 'accepted', 'rejected', 'withdrawn')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  thread_id text,
+  worker_account_id uuid references public.accounts(id) on delete set null,
+  worker_email text not null default '',
+  worker jsonb not null default '{}'::jsonb,
+  hostel_account_id uuid references public.accounts(id) on delete set null,
+  hostel_email text not null default '',
+  opening jsonb not null default '{}'::jsonb,
+  message text not null default '',
+  questions text not null default '',
+  admin_notes text not null default ''
+);
+
+create index if not exists applications_status_idx on public.applications (status);
+create index if not exists applications_worker_account_idx on public.applications (worker_account_id);
+create index if not exists applications_worker_email_idx on public.applications (worker_email);
+create index if not exists applications_hostel_account_idx on public.applications (hostel_account_id);
+create index if not exists applications_created_at_idx on public.applications (created_at desc);
+
 alter table public.submissions enable row level security;
 alter table public.accounts enable row level security;
 alter table public.email_outbox enable row level security;
 alter table public.password_resets enable row level security;
 alter table public.admin_actions enable row level security;
+alter table public.applications enable row level security;
 
 grant select, insert, update, delete on public.submissions to service_role;
 grant select, insert, update, delete on public.accounts to service_role;
 grant select, insert, update, delete on public.email_outbox to service_role;
 grant select, insert, update, delete on public.password_resets to service_role;
 grant select, insert, update, delete on public.admin_actions to service_role;
+grant select, insert, update, delete on public.applications to service_role;
 
 -- Public browser users should not query these tables directly.
 -- The Node server uses the service role after its own authorization checks.
@@ -120,6 +145,14 @@ with check (true);
 drop policy if exists "service role manages admin actions" on public.admin_actions;
 create policy "service role manages admin actions"
 on public.admin_actions
+for all
+to service_role
+using (true)
+with check (true);
+
+drop policy if exists "service role manages applications" on public.applications;
+create policy "service role manages applications"
+on public.applications
 for all
 to service_role
 using (true)

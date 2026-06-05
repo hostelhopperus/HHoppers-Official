@@ -1218,6 +1218,27 @@ textarea:focus {
   gap: 8px;
 }
 
+.listing-meta-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.checkbox-line {
+  align-items: center;
+  display: flex !important;
+  gap: 10px;
+}
+
+.checkbox-line input {
+  accent-color: var(--forest);
+  flex: 0 0 auto;
+  height: 18px;
+  width: 18px;
+}
+
+.checkbox-line span {
+  line-height: 1.35;
+}
+
 .checks {
   display: grid;
 }
@@ -2173,6 +2194,73 @@ textarea:focus {
   vertical-align: middle;
 }
 
+.profile-strength-card {
+  background: #fff8df;
+  border: 2px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: 5px 5px 0 rgba(47, 38, 28, 0.16);
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 18px;
+}
+
+.profile-strength-card h3 {
+  font-size: 28px;
+  font-weight: 900;
+  margin: 4px 0;
+}
+
+.profile-strength-card p {
+  color: var(--muted);
+  margin: 0;
+  padding: 0;
+}
+
+.profile-strength-meter {
+  background: rgba(47, 38, 28, 0.12);
+  border: 2px solid rgba(47, 38, 28, 0.26);
+  border-radius: 999px;
+  height: 18px;
+  overflow: hidden;
+}
+
+.profile-strength-meter span {
+  background: linear-gradient(90deg, var(--gold), var(--forest));
+  display: block;
+  height: 100%;
+}
+
+.profile-strength-next {
+  font-size: 13px;
+}
+
+.verification-badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.verification-badge {
+  border: 1px solid rgba(47, 38, 28, 0.2);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 900;
+  padding: 6px 9px;
+}
+
+.verification-badge.is-active {
+  background: #dfeac3;
+  color: var(--pine);
+}
+
+.verification-badge.is-muted {
+  background: #f4ead3;
+  color: var(--muted);
+}
+
 .status-stack {
   align-items: flex-end;
   display: grid;
@@ -2829,6 +2917,45 @@ textarea:focus {
   margin: 3px 0 0;
 }
 
+.admin-note-field {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.admin-note-field span {
+  color: #6f7d7e;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.admin-note-field textarea {
+  border: 1px solid #bfc8c1;
+  border-radius: 6px;
+  min-height: 82px;
+  padding: 8px;
+  resize: vertical;
+  width: 100%;
+}
+
+.status-applied,
+.status-viewed,
+.status-shortlisted,
+.status-contacted,
+.status-interview,
+.status-accepted,
+.status-withdrawn {
+  background: #e8efe6;
+  color: var(--pine);
+}
+
+.status-rejected {
+  background: #f5d8cf;
+  color: #7d321f;
+}
+
 .submission-card {
   background: white;
   border: 1px solid var(--line);
@@ -3007,7 +3134,8 @@ textarea:focus {
   .admin-stats,
   .membership-list,
   .submission-details,
-  .opening-filters {
+  .opening-filters,
+  .listing-meta-grid {
     grid-template-columns: 1fr;
   }
 

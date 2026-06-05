@@ -14,6 +14,7 @@ const EMAIL_OUTBOX_FILE = path.join(DATA_DIR, "email-outbox.json");
 const ACCOUNTS_FILE = path.join(DATA_DIR, "accounts.json");
 const PASSWORD_RESETS_FILE = path.join(DATA_DIR, "password-resets.json");
 const ADMIN_ACTIONS_FILE = path.join(DATA_DIR, "admin-actions.json");
+const APPLICATIONS_FILE = path.join(DATA_DIR, "applications.json");
 const ADMIN_CODE = process.env.ADMIN_CODE || "finntazer_69";
 const SESSION_COOKIE = "hh_admin";
 const ACCOUNT_COOKIE = "hh_account";
@@ -21,6 +22,18 @@ const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
 const sessions = new Set();
 const accountSessions = new Map();
 const rateBuckets = new Map();
+const APPLICATION_STATUSES = new Set([
+  "applied",
+  "viewed",
+  "shortlisted",
+  "contacted",
+  "interview",
+  "accepted",
+  "rejected",
+  "withdrawn",
+]);
+const WORKER_REVIEW_STATUSES = new Set(["profile_draft", "new", "reviewed", "approved", "rejected", "matched", "placed"]);
+const HOSTEL_REVIEW_STATUSES = new Set(["profile_draft", "lead", "contacted", "pilot", "active", "paying", "churned", "approved", "rejected"]);
 
 const STRIPE_PAYMENT_LINK_IDS = {
   "worker-basic": process.env.STRIPE_WORKER_BASIC_PAYMENT_LINK_ID || "plink_1TbvRaJwdwooinLhcCKhRdpo",
@@ -190,6 +203,7 @@ async function ensureDataFiles() {
   await readJson(ACCOUNTS_FILE, []);
   await readJson(PASSWORD_RESETS_FILE, []);
   await readJson(ADMIN_ACTIONS_FILE, []);
+  await readJson(APPLICATIONS_FILE, []);
 }
 
 async function readJson(file, fallback) {
@@ -228,6 +242,21 @@ function normalizeList(value) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function workerProfileCompletion(profile = {}) {
+  const checks = [
+    Boolean(profile.photo),
+    Boolean(profile.startDate || profile.endDate),
+    normalizeList(profile.preferredRegions).length > 0,
+    normalizeList(profile.tags).length > 0,
+    normalizeList(profile.languages).length > 0,
+    Boolean(profile.experience || normalizeList(profile.previousHostels).length),
+    Boolean(profile.bio),
+    Boolean(profile.references),
+    Boolean(profile.workEligibilityAcknowledged),
+  ];
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 }
 
 function defaultAccountPlan(type) {
@@ -289,6 +318,8 @@ function buildAccountBilling(type, plan, incoming = {}) {
     cancelAtPeriodEnd: Boolean(incoming.cancelAtPeriodEnd),
     canceledAt: incoming.canceledAt || null,
     currentPeriodEnd: incoming.currentPeriodEnd || null,
+    welcomedAt: incoming.welcomedAt || null,
+    welcomeEmailStatus: incoming.welcomeEmailStatus || null,
   };
 }
 
@@ -350,6 +381,7 @@ function sanitizeAccountProfile(input, type, existing = {}) {
     headline: type === "worker" ? String(profile.headline || existing.headline || "").trim() : "",
     languages: type === "worker" ? normalizeList(profile.languages || existing.languages) : [],
     previousHostels: type === "worker" ? normalizeList(profile.previousHostels || existing.previousHostels) : [],
+    workCountries: type === "worker" ? normalizeList(profile.workCountries || existing.workCountries) : [],
     experience: type === "worker" ? String(profile.experience || existing.experience || "").trim() : "",
     education: type === "worker" ? String(profile.education || existing.education || "").trim() : "",
     certifications: type === "worker" ? normalizeList(profile.certifications || existing.certifications) : [],
@@ -357,6 +389,12 @@ function sanitizeAccountProfile(input, type, existing = {}) {
     preferredRegions: type === "worker" ? normalizeList(profile.preferredRegions || existing.preferredRegions) : [],
     workStyle: type === "worker" ? String(profile.workStyle || existing.workStyle || "").trim() : "",
     portfolio: type === "worker" ? String(profile.portfolio || existing.portfolio || "").trim() : "",
+    workEligibilityAcknowledged:
+      type === "worker" ? Boolean(profile.workEligibilityAcknowledged || existing.workEligibilityAcknowledged) : false,
+    phone: String(profile.phone || existing.phone || "").trim(),
+    whatsapp: String(profile.whatsapp || existing.whatsapp || "").trim(),
+    adminNotes: String(existing.adminNotes || profile.adminNotes || "").trim(),
+    verification: profile.verification && typeof profile.verification === "object" ? profile.verification : existing.verification || {},
   };
 }
 
@@ -390,7 +428,14 @@ function fromDbAccount(row) {
   };
 }
 
-function publicAccount(account) {
+function clientProfile(profile = {}, includeAdmin = false) {
+  if (includeAdmin) return profile || {};
+  const { adminNotes, ...safeProfile } = profile || {};
+  return safeProfile;
+}
+
+function publicAccount(account, options = {}) {
+  const includeAdmin = Boolean(options.admin);
   return {
     id: account.id,
     type: account.type,
@@ -398,7 +443,7 @@ function publicAccount(account) {
     status: account.status,
     createdAt: account.createdAt,
     updatedAt: account.updatedAt,
-    profile: account.profile || {},
+    profile: clientProfile(account.profile || {}, includeAdmin),
     billing: account.billing || buildAccountBilling(account.type, account.profile?.plan || defaultAccountPlan(account.type)),
     security: {
       passwordLogin: Boolean(account.passwordHash),
@@ -505,6 +550,10 @@ function publicSubmission(submission) {
 
 function accountToPublishedHostel(account) {
   const profile = account.profile || {};
+  const locationParts = String(profile.location || "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
   return {
     id: account.id,
     type: "hostel",
@@ -516,10 +565,18 @@ function accountToPublishedHostel(account) {
       name: profile.name || "Approved hostel",
       email: account.email,
       location: profile.location || "Location pending",
+      city: locationParts.length > 1 ? locationParts.slice(0, -1).join(", ") : locationParts[0] || "",
+      country: locationParts.length > 1 ? locationParts.at(-1) : "",
       website: profile.website || "",
       roles: normalizeList(profile.tags),
       startDate: profile.startDate || "",
       endDate: profile.endDate || "",
+      minimumStay: profile.minimumStay || profile.duration || "",
+      housingIncluded: Boolean(profile.housingIncluded || String(profile.bio || "").toLowerCase().includes("housing") || String(profile.bio || "").toLowerCase().includes("bed")),
+      mealsIncluded: Boolean(profile.mealsIncluded || String(profile.bio || "").toLowerCase().includes("breakfast") || String(profile.bio || "").toLowerCase().includes("meal")),
+      compensation: profile.compensation || profile.type || "Confirm with hostel",
+      hoursPerWeek: profile.hoursPerWeek || "",
+      languages: normalizeList(profile.languages),
       plan: profile.plan || defaultAccountPlan("hostel"),
       description: profile.bio || "Details available after approval",
       photos: Array.isArray(profile.photos) ? profile.photos.slice(0, 10) : [],
@@ -552,6 +609,135 @@ function fromDbSubmission(row) {
     data: row.data || {},
     payment: row.payment || buildPaymentRecord(row.type, row.data?.plan),
     notes: row.notes || "",
+  };
+}
+
+function cleanApplicationText(value, maxLength = 1200) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function normalizeApplicationStatus(status) {
+  const value = String(status || "applied").toLowerCase();
+  return APPLICATION_STATUSES.has(value) ? value : "applied";
+}
+
+function applicationLocation(opening = {}) {
+  const city = String(opening.city || "").trim();
+  const country = String(opening.country || "").trim();
+  if (city && country) return `${city}, ${country}`;
+  return String(opening.location || country || city || "Location pending").trim();
+}
+
+function sanitizeApplication(input, workerAccount) {
+  const body = input && typeof input === "object" ? input : {};
+  const opening = body.opening && typeof body.opening === "object" ? body.opening : {};
+  const workerProfile = workerAccount.profile || {};
+  const worker = body.worker && typeof body.worker === "object" ? body.worker : {};
+  const role = cleanApplicationText(opening.role || opening.roleNeeded || opening.name || opening.title || "Hostel role", 160);
+  const hostelName = cleanApplicationText(opening.hostelName || opening.hostel || opening.name || "Hostel", 160);
+  const location = applicationLocation(opening);
+  const now = new Date().toISOString();
+
+  return {
+    id: crypto.randomUUID(),
+    status: "applied",
+    createdAt: now,
+    updatedAt: now,
+    threadId: cleanApplicationText(body.threadId, 160),
+    workerAccountId: workerAccount.id,
+    workerEmail: workerAccount.email,
+    worker: {
+      name: cleanApplicationText(worker.name || workerProfile.name || "Worker", 160),
+      email: normalizeEmail(worker.email || workerAccount.email),
+      startDate: String(worker.startDate || workerProfile.startDate || "").trim(),
+      endDate: String(worker.endDate || workerProfile.endDate || "").trim(),
+      roles: cleanApplicationText(worker.roles || normalizeList(workerProfile.tags).join(", "), 300),
+      profileCompleteness: workerProfileCompletion(workerProfile),
+    },
+    hostelAccountId: cleanApplicationText(opening.hostelAccountId || opening.accountId || (opening.source === "account" ? opening.id : ""), 160),
+    hostelEmail: normalizeEmail(opening.hostelEmail || opening.email || ""),
+    opening: {
+      id: cleanApplicationText(opening.id, 160),
+      source: cleanApplicationText(opening.source || (opening.sample ? "sample" : "published"), 80),
+      hostelName,
+      role,
+      title: role,
+      city: cleanApplicationText(opening.city, 120),
+      country: cleanApplicationText(opening.country, 120),
+      location,
+      startDate: String(opening.startDate || "").trim(),
+      startMonth: cleanApplicationText(opening.startMonth || opening.start || "", 80),
+      minimumStay: cleanApplicationText(opening.minimumStay || opening.duration || opening.stay || "", 120),
+      housingIncluded: Boolean(opening.housingIncluded),
+      mealsIncluded: Boolean(opening.mealsIncluded),
+      compensation: cleanApplicationText(opening.compensation || opening.type || "", 120),
+      hoursPerWeek: cleanApplicationText(opening.hoursPerWeek || opening.hours || "", 80),
+      languages: normalizeList(opening.languages || opening.languageRequirements),
+      pilot: Boolean(opening.pilot || opening.sample || String(opening.status || "").toLowerCase().includes("pilot")),
+    },
+    message: cleanApplicationText(body.message, 1600),
+    questions: cleanApplicationText(body.questions, 1200),
+    adminNotes: "",
+  };
+}
+
+function toDbApplication(application) {
+  return {
+    id: application.id,
+    status: application.status,
+    created_at: application.createdAt,
+    updated_at: application.updatedAt,
+    thread_id: application.threadId || null,
+    worker_account_id: application.workerAccountId || null,
+    worker_email: application.workerEmail || application.worker?.email || "",
+    worker: application.worker || {},
+    hostel_account_id: application.hostelAccountId || null,
+    hostel_email: application.hostelEmail || "",
+    opening: application.opening || {},
+    message: application.message || "",
+    questions: application.questions || "",
+    admin_notes: application.adminNotes || "",
+  };
+}
+
+function fromDbApplication(row) {
+  return {
+    id: row.id,
+    status: normalizeApplicationStatus(row.status),
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    threadId: row.thread_id || "",
+    workerAccountId: row.worker_account_id || "",
+    workerEmail: row.worker_email || row.worker?.email || "",
+    worker: row.worker || {},
+    hostelAccountId: row.hostel_account_id || "",
+    hostelEmail: row.hostel_email || "",
+    opening: row.opening || {},
+    message: row.message || "",
+    questions: row.questions || "",
+    adminNotes: row.admin_notes || "",
+  };
+}
+
+function publicApplication(application) {
+  return {
+    id: application.id,
+    status: normalizeApplicationStatus(application.status),
+    createdAt: application.createdAt,
+    updatedAt: application.updatedAt,
+    threadId: application.threadId || "",
+    workerAccountId: application.workerAccountId || "",
+    workerEmail: application.workerEmail || application.worker?.email || "",
+    worker: application.worker || {},
+    hostelAccountId: application.hostelAccountId || "",
+    hostelEmail: application.hostelEmail || "",
+    opening: application.opening || {},
+    message: application.message || "",
+    questions: application.questions || "",
+    adminNotes: application.adminNotes || "",
   };
 }
 
@@ -622,6 +808,64 @@ async function listSubmissions() {
     return rows.map(fromDbSubmission);
   }
   return readJson(SUBMISSIONS_FILE, []);
+}
+
+async function listApplications() {
+  if (useSupabase()) {
+    try {
+      const rows = await supabaseRequest("applications?select=*&order=created_at.desc");
+      return rows.map(fromDbApplication);
+    } catch (error) {
+      console.warn(`Application storage fallback: ${error.message}`);
+    }
+  }
+  return readJson(APPLICATIONS_FILE, []);
+}
+
+async function saveApplication(application) {
+  if (useSupabase()) {
+    try {
+      const rows = await supabaseRequest("applications", {
+        method: "POST",
+        headers: { prefer: "return=representation" },
+        body: JSON.stringify(toDbApplication(application)),
+      });
+      return fromDbApplication(rows[0]);
+    } catch (error) {
+      console.warn(`Application storage fallback: ${error.message}`);
+    }
+  }
+  const applications = await readJson(APPLICATIONS_FILE, []);
+  applications.unshift(application);
+  await writeJson(APPLICATIONS_FILE, applications);
+  return application;
+}
+
+async function replaceApplication(id, updater) {
+  const applications = await listApplications();
+  let updated;
+  const next = applications.map((application) => {
+    if (application.id !== id) return application;
+    updated = updater(application);
+    return updated;
+  });
+  if (!updated) return null;
+
+  if (useSupabase()) {
+    try {
+      const rows = await supabaseRequest(`applications?id=eq.${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        headers: { prefer: "return=representation" },
+        body: JSON.stringify(toDbApplication(updated)),
+      });
+      return fromDbApplication(rows[0]);
+    } catch (error) {
+      console.warn(`Application storage fallback: ${error.message}`);
+    }
+  }
+
+  await writeJson(APPLICATIONS_FILE, next);
+  return updated;
 }
 
 async function listAccounts() {
@@ -889,10 +1133,24 @@ async function deleteAccountData(account) {
   const accountId = String(account.id || "");
   const submissions = await listSubmissions();
   const submissionIds = submissions.filter((submission) => submissionBelongsToAccount(submission, account)).map((submission) => submission.id);
+  const applications = await listApplications();
+  const applicationIds = applications
+    .filter((application) => {
+      if (account.type === "worker") {
+        return application.workerAccountId === accountId || normalizeEmail(application.workerEmail || application.worker?.email) === email;
+      }
+      return application.hostelAccountId === accountId || normalizeEmail(application.hostelEmail) === email;
+    })
+    .map((application) => application.id);
 
   if (useSupabase()) {
     for (const submissionId of submissionIds) {
       await supabaseRequest(`submissions?id=eq.${encodeURIComponent(submissionId)}`, { method: "DELETE" });
+    }
+    for (const applicationId of applicationIds) {
+      await supabaseRequest(`applications?id=eq.${encodeURIComponent(applicationId)}`, { method: "DELETE" }).catch((error) => {
+        console.warn(`Application delete fallback: ${error.message}`);
+      });
     }
     await supabaseRequest(`password_resets?account_id=eq.${encodeURIComponent(accountId)}`, { method: "DELETE" });
     if (email) await supabaseRequest(`password_resets?email=eq.${encodeURIComponent(email)}`, { method: "DELETE" });
@@ -900,7 +1158,7 @@ async function deleteAccountData(account) {
     await supabaseRequest(`admin_actions?account_id=eq.${encodeURIComponent(accountId)}`, { method: "DELETE" });
     if (email) await supabaseRequest(`admin_actions?target_email=eq.${encodeURIComponent(email)}`, { method: "DELETE" });
     await supabaseRequest(`accounts?id=eq.${encodeURIComponent(accountId)}`, { method: "DELETE" });
-    return { submissionsDeleted: submissionIds.length };
+    return { submissionsDeleted: submissionIds.length, applicationsDeleted: applicationIds.length };
   }
 
   const accounts = await readJson(ACCOUNTS_FILE, []);
@@ -912,6 +1170,11 @@ async function deleteAccountData(account) {
   await writeJson(
     SUBMISSIONS_FILE,
     submissions.filter((submission) => !submissionIds.includes(submission.id))
+  );
+
+  await writeJson(
+    APPLICATIONS_FILE,
+    applications.filter((application) => !applicationIds.includes(application.id))
   );
 
   const resets = await readJson(PASSWORD_RESETS_FILE, []);
@@ -932,7 +1195,7 @@ async function deleteAccountData(account) {
     actions.filter((action) => action.accountId !== accountId && normalizeEmail(action.targetEmail) !== email)
   );
 
-  return { submissionsDeleted: submissionIds.length };
+  return { submissionsDeleted: submissionIds.length, applicationsDeleted: applicationIds.length };
 }
 
 async function recordAccountDeletion(account, deletion, subscription) {
@@ -1017,16 +1280,38 @@ async function deleteRejectedSubmissions() {
 }
 
 async function accountApplications(account) {
-  const submissions = await listSubmissions();
-  return submissions
-    .filter((submission) => normalizeEmail(submission.data.email) === account.email)
+  const [applications, submissions] = await Promise.all([listApplications(), listSubmissions()]);
+  const email = normalizeEmail(account.email);
+  const accountId = String(account.id || "");
+  const profileName = String(account.profile?.name || "").toLowerCase();
+  const records = applications.filter((application) => {
+    if (account.type === "worker") {
+      return application.workerAccountId === accountId || normalizeEmail(application.workerEmail || application.worker?.email) === email;
+    }
+    const hostelName = String(application.opening?.hostelName || application.opening?.name || "").toLowerCase();
+    return (
+      application.hostelAccountId === accountId ||
+      normalizeEmail(application.hostelEmail) === email ||
+      (profileName && hostelName === profileName)
+    );
+  });
+  const submissionRecords = submissions
+    .filter((submission) => normalizeEmail(submission.data.email) === email)
     .map((submission) => ({
       id: submission.id,
       type: submission.type,
       status: submission.status,
       createdAt: submission.createdAt,
+      updatedAt: submission.reviewedAt || submission.createdAt,
       planLabel: submission.payment?.planLabel || planDetails(submission.data.plan, submission.type).label,
+      source: "profile_submission",
+      opening: {
+        role: submission.type === "hostel" ? "Hostel profile submission" : "Worker profile submission",
+        hostelName: submission.type === "hostel" ? submission.data.name || "Hostel profile" : "Hoppers review",
+        location: submission.data.location || "Location pending",
+      },
     }));
+  return [...records.map(publicApplication), ...submissionRecords];
 }
 
 async function accountPayload(account) {
@@ -1381,7 +1666,7 @@ async function handleStripeWebhook(req, res) {
     const account = await findAccountForCheckoutSession(session);
     if (account && (session.payment_status === "paid" || session.status === "complete")) {
       const subscription = session.subscription && typeof session.subscription === "object" ? session.subscription : null;
-      await replaceAccount(account.id, (current) => ({
+      const updated = await replaceAccount(account.id, (current) => ({
         ...current,
         status: "profile_draft",
         updatedAt: new Date().toISOString(),
@@ -1400,6 +1685,7 @@ async function handleStripeWebhook(req, res) {
           currentPeriodEnd: stripePeriodEnd(subscription) || current.billing?.currentPeriodEnd || null,
         }),
       }));
+      await maybeSendWelcomeEmail(updated);
     }
   }
   if ((event.type === "customer.subscription.updated" || event.type === "customer.subscription.deleted") && session?.id) {
@@ -1654,6 +1940,39 @@ async function createPasswordResetForAccount(req, account, requestedBy = "accoun
       `This link expires in 1 hour and can only be used once. If you did not ask for this, you can ignore this email.`,
   });
   return { reset, resetUrl: link, email };
+}
+
+async function sendWelcomeEmail(account) {
+  if (!account?.email) return null;
+  if (account.type === "hostel") {
+    return queueEmail({
+      to: account.email,
+      subject: "Welcome to the Hoppers pilot",
+      body:
+        "Thanks for joining Hoppers. Add your first role or tell us what kind of seasonal help you need. Hoppers helps introduce traveling workers, but hostels remain responsible for interviews, final decisions, role terms, housing, pay/exchange terms, and legal compliance.",
+    });
+  }
+  return queueEmail({
+    to: account.email,
+    subject: "Welcome to Hoppers",
+    body:
+      "Thanks for joining Hoppers. Complete your profile so hostels can understand your dates, skills, and ideal placement. Hoppers does not guarantee jobs, visas, pay, housing, or employment. Hostels make final decisions and are responsible for role terms and legal compliance.",
+  });
+}
+
+async function maybeSendWelcomeEmail(account) {
+  if (!account || account.billing?.welcomedAt) return null;
+  const email = await sendWelcomeEmail(account);
+  await replaceAccount(account.id, (current) => ({
+    ...current,
+    updatedAt: new Date().toISOString(),
+    billing: {
+      ...(current.billing || {}),
+      welcomedAt: new Date().toISOString(),
+      welcomeEmailStatus: email?.status || "queued",
+    },
+  }));
+  return email;
 }
 
 async function notifySubmission(submission) {
@@ -1962,6 +2281,7 @@ async function handleApi(req, res, pathname) {
       updatedAt: new Date().toISOString(),
       billing,
     }));
+    await maybeSendWelcomeEmail(updated);
     const token = createSignedToken({ purpose: "account", accountId: updated.id });
     accountSessions.set(token, updated.id);
     json(
@@ -2034,6 +2354,7 @@ async function handleApi(req, res, pathname) {
           createdAt: now,
           ...accountData,
         });
+    await maybeSendWelcomeEmail(account);
     const token = createSignedToken({ purpose: "account", accountId: account.id });
     accountSessions.set(token, account.id);
     json(
@@ -2191,6 +2512,18 @@ async function handleApi(req, res, pathname) {
     return true;
   }
 
+  if (pathname === "/api/applications" && req.method === "POST") {
+    const account = await accountFromRequest(req);
+    if (!account || account.type !== "worker") {
+      json(res, 401, { error: "A worker account is required before applying." });
+      return true;
+    }
+    const body = await readBody(req);
+    const application = await saveApplication(sanitizeApplication(body, account));
+    json(res, 201, { application: publicApplication(application) });
+    return true;
+  }
+
   if (pathname === "/api/admin/login" && req.method === "POST") {
     if (!rateLimit(req, "admin-login", 8, 15 * 60 * 1000)) {
       json(res, 429, { error: "Too many login attempts. Try again later." });
@@ -2276,7 +2609,17 @@ async function handleApi(req, res, pathname) {
       return true;
     }
     const accounts = await listAccounts();
-    json(res, 200, { accounts: accounts.map(publicAccount) });
+    json(res, 200, { accounts: accounts.map((account) => publicAccount(account, { admin: true })) });
+    return true;
+  }
+
+  if (pathname === "/api/admin/applications" && req.method === "GET") {
+    if (!isAdmin(req)) {
+      json(res, 401, { error: "Admin login required" });
+      return true;
+    }
+    const applications = await listApplications();
+    json(res, 200, { applications: applications.map(publicApplication) });
     return true;
   }
 
@@ -2372,6 +2715,7 @@ async function handleApi(req, res, pathname) {
     const account = existing
       ? await replaceAccount(existing.id, (current) => ({ ...current, ...accountData, createdAt: current.createdAt || now }))
       : await saveAccount({ id: crypto.randomUUID(), createdAt: now, ...accountData });
+    await maybeSendWelcomeEmail(account);
 
     await logAdminAction({
       action: "paid_account_recovered",
@@ -2440,11 +2784,17 @@ async function handleApi(req, res, pathname) {
       return true;
     }
     const { status } = await readBody(req);
-    if (!["profile_draft", "approved", "rejected"].includes(status)) {
+    const id = decodeURIComponent(accountStatusMatch[1]);
+    const account = await findAccountById(id);
+    if (!account) {
+      json(res, 404, { error: "Account not found" });
+      return true;
+    }
+    const allowedStatuses = account.type === "hostel" ? HOSTEL_REVIEW_STATUSES : WORKER_REVIEW_STATUSES;
+    if (!allowedStatuses.has(status)) {
       json(res, 400, { error: "Unsupported status" });
       return true;
     }
-    const id = decodeURIComponent(accountStatusMatch[1]);
     const updated = await replaceAccount(id, (account) => {
       const billing = account.billing || buildAccountBilling(account.type, account.profile?.plan || defaultAccountPlan(account.type));
       return {
@@ -2474,6 +2824,30 @@ async function handleApi(req, res, pathname) {
       targetEmail: updated.email,
       metadata: { status },
     });
+    json(res, 200, { account: publicAccount(updated) });
+    return true;
+  }
+
+  const accountNotesMatch = pathname.match(/^\/api\/admin\/accounts\/([^/]+)\/notes$/);
+  if (accountNotesMatch && req.method === "PATCH") {
+    if (!isAdmin(req)) {
+      json(res, 401, { error: "Admin login required" });
+      return true;
+    }
+    const { notes } = await readBody(req);
+    const id = decodeURIComponent(accountNotesMatch[1]);
+    const updated = await replaceAccount(id, (account) => ({
+      ...account,
+      updatedAt: new Date().toISOString(),
+      profile: {
+        ...(account.profile || {}),
+        adminNotes: String(notes || ""),
+      },
+    }));
+    if (!updated) {
+      json(res, 404, { error: "Account not found" });
+      return true;
+    }
     json(res, 200, { account: publicAccount(updated) });
     return true;
   }
@@ -2566,6 +2940,53 @@ async function handleApi(req, res, pathname) {
       return true;
     }
     json(res, 200, { submission: publicSubmission(updated) });
+    return true;
+  }
+
+  const applicationStatusMatch = pathname.match(/^\/api\/admin\/applications\/([^/]+)\/status$/);
+  if (applicationStatusMatch && req.method === "PATCH") {
+    if (!isAdmin(req)) {
+      json(res, 401, { error: "Admin login required" });
+      return true;
+    }
+    const { status } = await readBody(req);
+    const normalizedStatus = String(status || "").toLowerCase();
+    if (!APPLICATION_STATUSES.has(normalizedStatus)) {
+      json(res, 400, { error: "Unsupported status" });
+      return true;
+    }
+    const id = decodeURIComponent(applicationStatusMatch[1]);
+    const updated = await replaceApplication(id, (application) => ({
+      ...application,
+      status: normalizedStatus,
+      updatedAt: new Date().toISOString(),
+    }));
+    if (!updated) {
+      json(res, 404, { error: "Application not found" });
+      return true;
+    }
+    json(res, 200, { application: publicApplication(updated) });
+    return true;
+  }
+
+  const applicationNotesMatch = pathname.match(/^\/api\/admin\/applications\/([^/]+)\/notes$/);
+  if (applicationNotesMatch && req.method === "PATCH") {
+    if (!isAdmin(req)) {
+      json(res, 401, { error: "Admin login required" });
+      return true;
+    }
+    const { notes } = await readBody(req);
+    const id = decodeURIComponent(applicationNotesMatch[1]);
+    const updated = await replaceApplication(id, (application) => ({
+      ...application,
+      adminNotes: String(notes || ""),
+      updatedAt: new Date().toISOString(),
+    }));
+    if (!updated) {
+      json(res, 404, { error: "Application not found" });
+      return true;
+    }
+    json(res, 200, { application: publicApplication(updated) });
     return true;
   }
 

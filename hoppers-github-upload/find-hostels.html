@@ -9,7 +9,7 @@
     <title>Find Hostels | Hoppers</title>
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./assets/icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=33" />
+    <link rel="stylesheet" href="./styles.css?v=34" />
   </head>
   <body>
     <header class="site-header">
@@ -67,6 +67,7 @@
               <div><dt>Housing</dt><dd>Bed included</dd></div>
               <div><dt>Meals</dt><dd>Breakfast included</dd></div>
               <div><dt>Type</dt><dd>Work exchange</dd></div>
+              <div><dt>Languages</dt><dd>English</dd></div>
             </dl>
             <a class="button button-dark" href="./opening-apply.html?name=Reception%20Helper&location=Lisbon%2C%20Portugal">Apply</a>
           </article>
@@ -82,6 +83,7 @@
               <div><dt>Housing</dt><dd>Dorm bed included</dd></div>
               <div><dt>Meals</dt><dd>Confirm with hostel</dd></div>
               <div><dt>Type</dt><dd>Work exchange</dd></div>
+              <div><dt>Languages</dt><dd>English, Spanish helpful</dd></div>
             </dl>
             <a class="button button-dark" href="./opening-apply.html?name=Social%20Events%20Crew&location=Costa%20Rica">Apply</a>
           </article>
@@ -97,6 +99,7 @@
               <div><dt>Housing</dt><dd>Bed included</dd></div>
               <div><dt>Meals</dt><dd>Confirm with hostel</dd></div>
               <div><dt>Type</dt><dd>Paid + housing</dd></div>
+              <div><dt>Languages</dt><dd>English, Portuguese helpful</dd></div>
             </dl>
             <a class="button button-dark" href="./opening-apply.html?name=Surf%20Hostel%20All-Rounder&location=Ericeira%2C%20Portugal">Apply</a>
           </article>
@@ -112,6 +115,7 @@
               <div><dt>Housing</dt><dd>Staff room included</dd></div>
               <div><dt>Meals</dt><dd>Confirm with hostel</dd></div>
               <div><dt>Type</dt><dd>Paid</dd></div>
+              <div><dt>Languages</dt><dd>English, Dutch helpful</dd></div>
             </dl>
             <a class="button button-dark" href="./opening-apply.html?name=Night%20Reception&location=Amsterdam%2C%20Netherlands">Apply</a>
           </article>
@@ -127,6 +131,7 @@
               <div><dt>Housing</dt><dd>Bed included</dd></div>
               <div><dt>Meals</dt><dd>Breakfast included</dd></div>
               <div><dt>Type</dt><dd>Exchange</dd></div>
+              <div><dt>Languages</dt><dd>English</dd></div>
             </dl>
             <a class="button button-dark" href="./opening-apply.html?name=Housekeeping%20%26%20Breakfast%20Support&location=Queenstown%2C%20New%20Zealand">Apply</a>
           </article>
@@ -142,6 +147,7 @@
               <div><dt>Housing</dt><dd>Dorm bed included</dd></div>
               <div><dt>Meals</dt><dd>Confirm with hostel</dd></div>
               <div><dt>Type</dt><dd>Paid trial / exchange</dd></div>
+              <div><dt>Languages</dt><dd>English</dd></div>
             </dl>
             <a class="button button-dark" href="./opening-apply.html?name=Bar%20%2F%20Events%20Assistant&location=Budapest%2C%20Hungary">Apply</a>
           </article>
@@ -190,6 +196,30 @@
             <span>Country</span>
             <select name="country" data-public-opening-country></select>
           </label>
+          <label>
+            <span>Paid / exchange</span>
+            <select name="type">
+              <option value="">Any type</option>
+              <option value="paid">Paid</option>
+              <option value="exchange">Exchange</option>
+              <option value="volunteer">Volunteer</option>
+              <option value="mixed">Mixed</option>
+            </select>
+          </label>
+          <label>
+            <span>Minimum stay I can do</span>
+            <select name="minimumStayWeeks">
+              <option value="">Any stay</option>
+              <option value="4">4+ weeks</option>
+              <option value="6">6+ weeks</option>
+              <option value="8">2+ months</option>
+              <option value="12">3+ months</option>
+            </select>
+          </label>
+          <label class="checkbox-line">
+            <input name="housingIncluded" type="checkbox" />
+            <span>Housing included</span>
+          </label>
         </form>
         <div id="public-opening-grid" class="card-grid" aria-live="polite"></div>
       </section>
@@ -200,7 +230,7 @@
       <p><a href="./sign-in.html">Sign in</a> · <a href="./workers.html">For workers</a> · <a href="./faq.html">FAQ</a></p>
     </footer>
 
-    <script src="./script.js?v=16"></script>
+    <script src="./script.js?v=17"></script>
     <script src="./site.js?v=1"></script>
     <script src="./app.js?v=1"></script>
   </body>

@@ -4,6 +4,8 @@ const loginForm = document.querySelector(".admin-login-card");
 const adminCode = document.querySelector("#admin-code");
 const accountReviewList = document.querySelector("#account-review-list");
 const submissionList = document.querySelector("#submission-list");
+const listingList = document.querySelector("#listing-list");
+const applicationReviewList = document.querySelector("#application-review-list");
 const toast = document.querySelector("#toast");
 const filterButtons = document.querySelectorAll("[data-filter]");
 const viewButtons = document.querySelectorAll("[data-view]");
@@ -19,12 +21,16 @@ let activeFilter = "all";
 let activeView = "accounts";
 let cachedAccounts = [];
 let cachedSubmissions = [];
+let cachedApplications = [];
 let cachedRecoveryRequests = [];
 let cachedAdminStats = { deletedAccounts: 0, deletedWorkers: 0, deletedHostels: 0, recoveryRequests: 0 };
 let statsRefreshTimer = null;
 
 const paidStatuses = new Set(["paid", "complete", "completed", "succeeded", "active"]);
 const subscribedStatuses = new Set(["active", "approved", "trialing"]);
+const applicationStatuses = ["applied", "viewed", "shortlisted", "contacted", "interview", "accepted", "rejected", "withdrawn"];
+const workerStatuses = ["new", "reviewed", "approved", "rejected", "matched", "placed"];
+const hostelStatuses = ["lead", "contacted", "pilot", "active", "paying", "churned", "approved", "rejected"];
 
 function escapeHtml(value) {
   return String(value || "")
@@ -71,6 +77,29 @@ function formatDateOnly(value) {
 function displayValue(value) {
   if (Array.isArray(value)) return value.join(", ");
   return value;
+}
+
+function profileList(value) {
+  if (Array.isArray(value)) return value.map((item) => String(item || "").trim()).filter(Boolean);
+  return String(value || "")
+    .split(/,|\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function workerProfileCompletion(profile = {}) {
+  const checks = [
+    profile.photo,
+    profile.startDate || profile.endDate,
+    profileList(profile.preferredRegions).length,
+    profileList(profile.tags).length,
+    profileList(profile.languages).length,
+    profile.experience || profileList(profile.previousHostels).length,
+    profile.bio,
+    profile.references,
+    profile.workEligibilityAcknowledged,
+  ];
+  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
 }
 
 function statusLabel(value) {
@@ -143,7 +172,8 @@ function hostelRows() {
       return {
         id: account.id,
         source: "account",
-        status: reviewStatus(account.status),
+        status: account.status || "lead",
+        reviewStatus: reviewStatus(account.status),
         name: profile.name || "Unnamed hostel",
         city: location.city,
         country: location.country,
@@ -153,6 +183,7 @@ function hostelRows() {
         email: account.email,
         details: accountRows(account),
         actionType: "account",
+        adminNotes: profile.adminNotes || "",
       };
     });
 
@@ -165,7 +196,8 @@ function hostelRows() {
       return {
         id: submission.id,
         source: "submission",
-        status: reviewStatus(submission.status),
+        status: submission.status || "pending",
+        reviewStatus: reviewStatus(submission.status),
         name: data.name || "Unnamed hostel",
         city: location.city,
         country: location.country,
@@ -175,6 +207,7 @@ function hostelRows() {
         email: data.email,
         details: submissionRows(submission),
         actionType: "submission",
+        adminNotes: submission.notes || "",
       };
     });
 
@@ -190,18 +223,39 @@ function workerRows() {
       const payment = paymentRecord(account.type, profile.plan, account.billing);
       return {
         id: account.id,
-        status: reviewStatus(account.status),
+        status: account.status || "new",
+        reviewStatus: reviewStatus(account.status),
         name: profile.name || "Unnamed worker",
         city: location.city,
         country: location.country,
         nationality: profile.nationality || profile.website,
+        completeness: workerProfileCompletion(profile),
         subscribed: shortStatus(account.billing?.monthlyStatus || payment.status, subscribedStatuses),
         paid: shortStatus(account.billing?.signupFeeStatus || payment.status, paidStatuses),
         phone: profile.phone || profile.contactNumber || "",
         email: account.email,
         details: accountRows(account),
+        adminNotes: profile.adminNotes || "",
       };
     });
+}
+
+function listingRows() {
+  return hostelRows().map((hostel) => {
+    const sourceAccount = cachedAccounts.find((account) => account.id === hostel.id);
+    const sourceSubmission = cachedSubmissions.find((submission) => submission.id === hostel.id);
+    const profile = sourceAccount?.profile || {};
+    const data = sourceSubmission?.data || {};
+    return {
+      ...hostel,
+      role: displayValue(profile.tags || data.roles || data.role || "Role not listed"),
+      startDate: formatDateOnly(profile.startDate || data.startDate),
+      minimumStay: profile.minimumStay || data.minimumStay || data.duration || "Not listed",
+      housing: profile.housingIncluded || data.housingIncluded ? "Yes" : "Confirm",
+      meals: profile.mealsIncluded || data.mealsIncluded ? "Yes" : "Confirm",
+      type: profile.compensation || data.compensation || data.type || "Confirm",
+    };
+  });
 }
 
 function sheetStatusClass(value) {
@@ -213,6 +267,24 @@ function detailRows(rows) {
     .filter(([, value]) => (Array.isArray(value) ? value.length : value))
     .map(([label, value]) => `<div><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(displayValue(value))}</dd></div>`)
     .join("");
+}
+
+function statusButtons(type, id, statuses, attribute) {
+  return statuses
+    .map(
+      (status) =>
+        `<button type="button" data-${attribute}-action="${escapeHtml(status)}" data-id="${escapeHtml(id)}">${escapeHtml(statusLabel(status))}</button>`
+    )
+    .join("");
+}
+
+function adminNoteBox(id, notes, attribute = "account-note-for") {
+  return `
+    <label class="admin-note-field">
+      <span>Admin notes</span>
+      <textarea data-${attribute}="${escapeHtml(id)}" placeholder="Add private admin notes">${escapeHtml(notes || "")}</textarea>
+    </label>
+  `;
 }
 
 function accountRows(account) {
@@ -280,14 +352,16 @@ function submissionRows(submission) {
 }
 
 async function loadData() {
-  const [{ accounts }, { submissions }, { stats }, { requests }] = await Promise.all([
+  const [{ accounts }, { submissions }, { applications }, { stats }, { requests }] = await Promise.all([
     fetchJson("/api/admin/accounts"),
     fetchJson("/api/submissions"),
+    fetchJson("/api/admin/applications"),
     fetchJson("/api/admin/stats"),
     fetchJson("/api/admin/recovery-requests"),
   ]);
   cachedAccounts = accounts;
   cachedSubmissions = submissions;
+  cachedApplications = applications || [];
   cachedRecoveryRequests = requests || [];
   cachedAdminStats = stats || cachedAdminStats;
 }
@@ -304,7 +378,14 @@ function visibleItems(items) {
 }
 
 function updateStats() {
-  const items = activeView === "accounts" ? workerRows() : hostelRows();
+  const items =
+    activeView === "accounts"
+      ? workerRows()
+      : activeView === "applications"
+        ? cachedApplications
+        : activeView === "listings"
+          ? listingRows()
+          : hostelRows();
   document.querySelector("#stat-pending").textContent = items.filter((item) => reviewStatus(item.status) === "pending").length;
   document.querySelector("#stat-approved").textContent = items.filter((item) => reviewStatus(item.status) === "approved").length;
   document.querySelector("#stat-rejected").textContent = items.filter((item) => reviewStatus(item.status) === "rejected").length;
@@ -386,6 +467,8 @@ function renderAccounts() {
               <th>City</th>
               <th>Country</th>
               <th>Nationality</th>
+              <th>Profile</th>
+              <th>Status</th>
               <th>Subscribed</th>
               <th>Paid</th>
               <th>Contact number</th>
@@ -403,16 +486,17 @@ function renderAccounts() {
                         <summary>Details</summary>
                         <dl class="sheet-details">${worker.details}</dl>
                         <div class="sheet-actions">
-                          <button type="button" data-account-action="approved" data-id="${escapeHtml(worker.id)}">Approve</button>
-                          <button type="button" data-account-action="rejected" data-id="${escapeHtml(worker.id)}">Reject</button>
-                          <button type="button" data-account-action="profile_draft" data-id="${escapeHtml(worker.id)}">Draft</button>
+                          ${statusButtons("worker", worker.id, workerStatuses, "account")}
                           <button type="button" data-account-reset data-id="${escapeHtml(worker.id)}">Send reset link</button>
                         </div>
+                        ${adminNoteBox(worker.id, worker.adminNotes)}
                       </details>
                     </td>
                     <td>${escapeHtml(worker.city)}</td>
                     <td>${escapeHtml(worker.country)}</td>
                     <td>${escapeHtml(worker.nationality)}</td>
+                    <td><span class="sheet-status ${worker.completeness >= 70 ? "is-good" : "is-pending"}">${escapeHtml(worker.completeness)}%</span></td>
+                    <td>${escapeHtml(statusLabel(worker.status))}</td>
                     <td><span class="sheet-status ${sheetStatusClass(worker.subscribed)}">${escapeHtml(worker.subscribed)}</span></td>
                     <td><span class="sheet-status ${sheetStatusClass(worker.paid)}">${escapeHtml(worker.paid)}</span></td>
                     <td>${escapeHtml(worker.phone)}</td>
@@ -440,6 +524,7 @@ function renderHostelAccounts() {
               <th>More</th>
               <th>City</th>
               <th>Country</th>
+              <th>Status</th>
               <th>Subscribed</th>
               <th>Paid</th>
               <th>Contact number</th>
@@ -460,15 +545,19 @@ function renderHostelAccounts() {
                         <summary>Details</summary>
                         <dl class="sheet-details">${hostel.details}</dl>
                         <div class="sheet-actions">
-                          <button type="button" data-${hostel.actionType}-action="approved" data-id="${escapeHtml(hostel.id)}">Approve</button>
-                          <button type="button" data-${hostel.actionType}-action="rejected" data-id="${escapeHtml(hostel.id)}">Reject</button>
-                          <button type="button" data-${hostel.actionType}-action="${hostel.actionType === "account" ? "profile_draft" : "pending"}" data-id="${escapeHtml(hostel.id)}">${hostel.actionType === "account" ? "Draft" : "Pending"}</button>
+                          ${
+                            hostel.actionType === "account"
+                              ? statusButtons("hostel", hostel.id, hostelStatuses, "account")
+                              : `<button type="button" data-submission-action="approved" data-id="${escapeHtml(hostel.id)}">Approve</button><button type="button" data-submission-action="rejected" data-id="${escapeHtml(hostel.id)}">Reject</button><button type="button" data-submission-action="pending" data-id="${escapeHtml(hostel.id)}">Pending</button>`
+                          }
                           ${hostel.actionType === "account" ? `<button type="button" data-account-reset data-id="${escapeHtml(hostel.id)}">Send reset link</button>` : ""}
                         </div>
+                        ${hostel.actionType === "account" ? adminNoteBox(hostel.id, hostel.adminNotes) : adminNoteBox(hostel.id, hostel.adminNotes, "note-for")}
                       </details>
                     </td>
                     <td>${escapeHtml(hostel.city)}</td>
                     <td>${escapeHtml(hostel.country)}</td>
+                    <td>${escapeHtml(statusLabel(hostel.status))}</td>
                     <td><span class="sheet-status ${sheetStatusClass(hostel.subscribed)}">${escapeHtml(hostel.subscribed)}</span></td>
                     <td><span class="sheet-status ${sheetStatusClass(hostel.paid)}">${escapeHtml(hostel.paid)}</span></td>
                     <td>${escapeHtml(hostel.phone)}</td>
@@ -484,14 +573,141 @@ function renderHostelAccounts() {
     : `<p class="empty-state">No ${activeFilter === "all" ? "" : activeFilter} hostel accounts yet.</p>`;
 }
 
+function renderListings() {
+  const visible = visibleItems(listingRows());
+  listingList.innerHTML = visible.length
+    ? `
+      <div class="admin-sheet" role="region" aria-label="Listings spreadsheet" tabindex="0">
+        <table>
+          <thead>
+            <tr>
+              <th>Hostel</th>
+              <th>More</th>
+              <th>City</th>
+              <th>Country</th>
+              <th>Role needed</th>
+              <th>Start date</th>
+              <th>Minimum stay</th>
+              <th>Housing</th>
+              <th>Meals</th>
+              <th>Type</th>
+              <th>Status</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${visible
+              .map(
+                (listing) => `
+                  <tr>
+                    <td><strong>${escapeHtml(listing.name)}</strong></td>
+                    <td>
+                      <details class="sheet-more">
+                        <summary>Details</summary>
+                        <dl class="sheet-details">${listing.details}</dl>
+                        <div class="sheet-actions">
+                          ${
+                            listing.actionType === "account"
+                              ? statusButtons("hostel", listing.id, hostelStatuses, "account")
+                              : `<button type="button" data-submission-action="approved" data-id="${escapeHtml(listing.id)}">Approve listing</button><button type="button" data-submission-action="rejected" data-id="${escapeHtml(listing.id)}">Reject listing</button><button type="button" data-submission-action="pending" data-id="${escapeHtml(listing.id)}">Pending</button>`
+                          }
+                        </div>
+                        ${listing.actionType === "account" ? adminNoteBox(listing.id, listing.adminNotes) : adminNoteBox(listing.id, listing.adminNotes, "note-for")}
+                      </details>
+                    </td>
+                    <td>${escapeHtml(listing.city)}</td>
+                    <td>${escapeHtml(listing.country)}</td>
+                    <td>${escapeHtml(listing.role)}</td>
+                    <td>${escapeHtml(listing.startDate || "Flexible")}</td>
+                    <td>${escapeHtml(listing.minimumStay)}</td>
+                    <td>${escapeHtml(listing.housing)}</td>
+                    <td>${escapeHtml(listing.meals)}</td>
+                    <td>${escapeHtml(listing.type)}</td>
+                    <td>${escapeHtml(statusLabel(listing.status))}</td>
+                  </tr>
+                `
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `
+    : `<p class="empty-state">No hostel listings yet.</p>`;
+}
+
+function renderAdminApplications() {
+  applicationReviewList.innerHTML = cachedApplications.length
+    ? `
+      <div class="admin-sheet" role="region" aria-label="Applications spreadsheet" tabindex="0">
+        <table>
+          <thead>
+            <tr>
+              <th>Worker</th>
+              <th>More</th>
+              <th>Hostel</th>
+              <th>Role</th>
+              <th>Location</th>
+              <th>Status</th>
+              <th>Profile</th>
+              <th>Applied</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${cachedApplications
+              .map(
+                (application) => `
+                  <tr>
+                    <td><strong>${escapeHtml(application.worker?.name || "Unnamed worker")}</strong></td>
+                    <td>
+                      <details class="sheet-more">
+                        <summary>Details</summary>
+                        <dl class="sheet-details">${detailRows([
+                          ["Worker email", application.worker?.email || application.workerEmail],
+                          ["Available", `${formatDateOnly(application.worker?.startDate)} - ${formatDateOnly(application.worker?.endDate)}`],
+                          ["Worker roles", application.worker?.roles],
+                          ["Hours/week", application.opening?.hoursPerWeek],
+                          ["Minimum stay", application.opening?.minimumStay],
+                          ["Housing", application.opening?.housingIncluded ? "Yes" : "No / confirm"],
+                          ["Meals", application.opening?.mealsIncluded ? "Yes" : "No / confirm"],
+                          ["Type", application.opening?.compensation],
+                          ["Languages", application.opening?.languages],
+                          ["Message", application.message],
+                          ["Questions", application.questions],
+                        ])}</dl>
+                        <div class="sheet-actions">
+                          ${statusButtons("application", application.id, applicationStatuses, "application")}
+                        </div>
+                        ${adminNoteBox(application.id, application.adminNotes, "application-note-for")}
+                      </details>
+                    </td>
+                    <td>${escapeHtml(application.opening?.hostelName || "Hostel")}</td>
+                    <td>${escapeHtml(application.opening?.role || application.opening?.title || "Role")}</td>
+                    <td>${escapeHtml(application.opening?.location || "Location pending")}</td>
+                    <td>${escapeHtml(statusLabel(application.status))}</td>
+                    <td><span class="sheet-status ${(application.worker?.profileCompleteness || 0) >= 70 ? "is-good" : "is-pending"}">${escapeHtml(application.worker?.profileCompleteness ?? 0)}%</span></td>
+                    <td>${escapeHtml(formatDate(application.createdAt))}</td>
+                  </tr>
+                `
+              )
+              .join("")}
+          </tbody>
+        </table>
+      </div>
+    `
+    : `<p class="empty-state">No worker applications yet.</p>`;
+}
+
 function renderDashboard() {
   updateStats();
   renderRecoveryRequests();
   accountReviewList.hidden = activeView !== "accounts";
   submissionList.hidden = activeView !== "submissions";
-  clearRejectedButton.hidden = activeView !== "submissions";
+  listingList.hidden = activeView !== "listings";
+  applicationReviewList.hidden = activeView !== "applications";
+  clearRejectedButton.hidden = activeView !== "submissions" && activeView !== "listings";
   if (activeView === "accounts") renderAccounts();
-  else renderHostelAccounts();
+  else if (activeView === "submissions") renderHostelAccounts();
+  else if (activeView === "listings") renderListings();
+  else renderAdminApplications();
 }
 
 async function refreshDashboard() {
@@ -542,21 +758,42 @@ filterButtons.forEach((button) => {
 });
 
 let noteTimer;
-submissionList.addEventListener("input", (event) => {
+function handleNoteInput(event) {
   const id = event.target.dataset.noteFor;
-  if (!id) return;
+  const accountId = event.target.dataset.accountNoteFor;
+  const applicationId = event.target.dataset.applicationNoteFor;
+  if (!id && !accountId && !applicationId) return;
   window.clearTimeout(noteTimer);
   noteTimer = window.setTimeout(async () => {
     try {
-      await fetchJson(`/api/submissions/${encodeURIComponent(id)}/notes`, {
-        method: "PATCH",
-        body: JSON.stringify({ notes: event.target.value }),
-      });
+      if (id) {
+        await fetchJson(`/api/submissions/${encodeURIComponent(id)}/notes`, {
+          method: "PATCH",
+          body: JSON.stringify({ notes: event.target.value }),
+        });
+      }
+      if (accountId) {
+        await fetchJson(`/api/admin/accounts/${encodeURIComponent(accountId)}/notes`, {
+          method: "PATCH",
+          body: JSON.stringify({ notes: event.target.value }),
+        });
+      }
+      if (applicationId) {
+        await fetchJson(`/api/admin/applications/${encodeURIComponent(applicationId)}/notes`, {
+          method: "PATCH",
+          body: JSON.stringify({ notes: event.target.value }),
+        });
+      }
     } catch {
       showToast("Could not save admin note.");
     }
   }, 350);
-});
+}
+
+submissionList.addEventListener("input", handleNoteInput);
+accountReviewList.addEventListener("input", handleNoteInput);
+listingList.addEventListener("input", handleNoteInput);
+applicationReviewList.addEventListener("input", handleNoteInput);
 
 async function updateAccountStatus(button) {
   if (!button) return;
@@ -660,7 +897,7 @@ accountReviewList.addEventListener("click", async (event) => {
   await updateAccountStatus(event.target.closest("[data-account-action]"));
 });
 
-submissionList.addEventListener("click", async (event) => {
+async function handleHostelQueueClick(event) {
   const resetButton = event.target.closest("[data-account-reset]");
   if (resetButton) {
     await sendAccountReset(resetButton);
@@ -685,6 +922,27 @@ submissionList.addEventListener("click", async (event) => {
     showToast(`Submission moved to ${button.dataset.submissionAction}.`);
   } catch (error) {
     showToast(error.message || "Could not update submission.");
+  } finally {
+    button.disabled = false;
+  }
+}
+
+submissionList.addEventListener("click", handleHostelQueueClick);
+listingList.addEventListener("click", handleHostelQueueClick);
+
+applicationReviewList.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-application-action]");
+  if (!button) return;
+  button.disabled = true;
+  try {
+    await fetchJson(`/api/admin/applications/${encodeURIComponent(button.dataset.id)}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ status: button.dataset.applicationAction }),
+    });
+    await refreshDashboard();
+    showToast(`Application moved to ${statusLabel(button.dataset.applicationAction)}.`);
+  } catch (error) {
+    showToast(error.message || "Could not update application.");
   } finally {
     button.disabled = false;
   }

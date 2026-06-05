@@ -71,10 +71,11 @@ function showToast(message) {
   window.setTimeout(() => toast.classList.remove("visible"), 2400);
 }
 
-async function fetchJson(url) {
+async function fetchJson(url, options = {}) {
   const response = await fetch(url, {
     credentials: "same-origin",
-    headers: { "content-type": "application/json" },
+    headers: { "content-type": "application/json", ...(options.headers || {}) },
+    ...options,
   });
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || "Request failed");
@@ -104,13 +105,38 @@ function dateRange(startDate, endDate) {
 }
 
 function submissionToOpening(submission) {
+  const data = submission.data || {};
+  const location = data.location || "Location pending";
+  const parts = String(location)
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
   return {
-    name: submission.data.name || "Approved hostel",
-    location: submission.data.location || "Location pending",
-    needs: valuesList(submission.data.roles || submission.data.role),
-    stay: dateRange(submission.data.startDate, submission.data.endDate),
-    benefits: submission.data.description || "Details available after approval",
-    details: submission.data.description || "More details will be shared after the hostel review is complete.",
+    id: submission.id,
+    source: submission.source || "submission",
+    hostelAccountId: submission.source === "account" ? submission.id : "",
+    hostelEmail: data.email || "",
+    name: data.role || valuesList(data.roles || data.role)[0] || "Hostel role",
+    role: data.role || valuesList(data.roles || data.role)[0] || "Hostel role",
+    hostelName: data.name || "Approved hostel",
+    location,
+    city: data.city || (parts.length > 1 ? parts.slice(0, -1).join(", ") : parts[0] || ""),
+    country: data.country || (parts.length > 1 ? parts.at(-1) : ""),
+    needs: valuesList(data.roles || data.role),
+    roles: valuesList(data.roles || data.role),
+    stay: data.minimumStay || data.duration || dateRange(data.startDate, data.endDate),
+    startDate: data.startDate || "",
+    endDate: data.endDate || "",
+    startMonth: data.startMonth || formatDateOnly(data.startDate) || "Flexible",
+    minimumStay: data.minimumStay || data.duration || "",
+    housingIncluded: Boolean(data.housingIncluded),
+    mealsIncluded: Boolean(data.mealsIncluded),
+    compensation: data.compensation || data.type || "Confirm with hostel",
+    hoursPerWeek: data.hoursPerWeek || data.hours || "Confirm with hostel",
+    languages: valuesList(data.languages || data.languageRequirements, "Confirm with hostel"),
+    benefits: data.description || "Details available after approval",
+    details: data.description || "More details will be shared after the hostel review is complete.",
+    pilot: Boolean(data.pilot),
   };
 }
 
@@ -129,16 +155,18 @@ async function openingOptions() {
 }
 
 function renderOpening(opening) {
-  document.querySelector("#apply-title").textContent = `Apply to ${opening.name}.`;
+  document.querySelector("#apply-title").textContent = `Apply to ${opening.role || opening.name}.`;
   document.querySelector("#apply-subtitle").textContent =
     "Send a clear first message and start a communication thread for the placement.";
-  document.querySelector("#opening-brief-title").textContent = opening.name;
+  document.querySelector("#opening-brief-title").textContent = opening.role || opening.name;
   document.querySelector("#opening-brief-location").textContent = `+ ${opening.location}`;
   document.querySelector("#opening-brief-stay").textContent = opening.stay || "Flexible dates";
   document.querySelector("#opening-brief-roles").innerHTML = valuesList(opening.needs)
     .map((item) => `<span class="badge">${escapeHtml(item)}</span>`)
     .join("");
-  document.querySelector("#opening-brief-benefits").textContent = opening.benefits || opening.details || "";
+  document.querySelector("#opening-brief-benefits").textContent =
+    opening.benefits ||
+    `${opening.hoursPerWeek || "Hours TBD"}. ${opening.housingIncluded ? "Housing included" : "Housing TBD"}. ${opening.compensation || "Type TBD"}.`;
 }
 
 function showApplicationGate(message) {
@@ -195,7 +223,7 @@ function threadFromForm(formData) {
   const questions = String(formData.get("questions") || "").trim();
   return {
     id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()),
-    status: "Application sent",
+    status: "applied",
     createdAt: now,
     updatedAt: now,
     opening: selectedOpening,
@@ -250,7 +278,7 @@ async function init() {
   await requireWorkerAccount();
 }
 
-form.addEventListener("submit", (event) => {
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!currentAccount || currentAccount.type !== "worker") {
     showApplicationGate();
@@ -259,11 +287,29 @@ form.addEventListener("submit", (event) => {
   }
   const formData = new FormData(form);
   const thread = threadFromForm(formData);
-  saveThreads([thread, ...storedThreads()]);
-  showToast("Application saved. Opening communications...");
-  window.setTimeout(() => {
-    window.location.href = `./communications.html?thread=${encodeURIComponent(thread.id)}`;
-  }, 500);
+  const button = form.querySelector('button[type="submit"]');
+  button.disabled = true;
+  try {
+    await fetchJson("/api/applications", {
+      method: "POST",
+      body: JSON.stringify({
+        opening: selectedOpening,
+        worker: thread.worker,
+        message: String(formData.get("message") || "").trim(),
+        questions: String(formData.get("questions") || "").trim(),
+        threadId: thread.id,
+      }),
+    });
+    saveThreads([thread, ...storedThreads()]);
+    showToast("Application saved. Opening communications...");
+    window.setTimeout(() => {
+      window.location.href = `./communications.html?thread=${encodeURIComponent(thread.id)}`;
+    }, 500);
+  } catch (error) {
+    showToast(error.message || "Could not save application.");
+  } finally {
+    button.disabled = false;
+  }
 });
 
 init();

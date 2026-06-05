@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hoppers Admin</title>
-    <link rel="stylesheet" href="./styles.css?v=32" />
+    <link rel="stylesheet" href="./styles.css?v=33" />
   </head>
   <body class="admin-page">
     <header class="site-header">
@@ -154,6 +154,8 @@
           <div class="segmented" aria-label="Admin queue">
             <button class="active" type="button" data-view="accounts">Workers</button>
             <button type="button" data-view="submissions">Hostel accounts</button>
+            <button type="button" data-view="listings">Listings</button>
+            <button type="button" data-view="applications">Applications</button>
           </div>
           <div class="segmented" aria-label="Review filter">
             <button class="active" type="button" data-filter="all">All</button>
@@ -166,10 +168,12 @@
 
         <div id="account-review-list" class="submission-list" aria-live="polite"></div>
         <div id="submission-list" class="submission-list" aria-live="polite" hidden></div>
+        <div id="listing-list" class="submission-list" aria-live="polite" hidden></div>
+        <div id="application-review-list" class="submission-list" aria-live="polite" hidden></div>
       </section>
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="./admin.js?v=20"></script>
+    <script src="./admin.js?v=21"></script>
   </body>
 </html>

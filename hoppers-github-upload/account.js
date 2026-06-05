@@ -20,6 +20,7 @@ const toast = document.querySelector("#toast");
 
 let currentAccount = null;
 let currentOpenings = [];
+let currentApplications = [];
 
 const planLabels = {
   "worker-basic": "Worker Basic",
@@ -81,100 +82,184 @@ const countries = [
 
 const fallbackOpenings = [
   {
+    id: "sample-reception-lisbon",
     name: "Reception Helper",
+    role: "Reception Helper",
+    hostelName: "Sample Lisbon Hostel",
+    city: "Lisbon",
+    country: "Portugal",
     location: "Lisbon, Portugal",
     roles: ["Reception", "Guest support"],
     startDate: "2026-07-01",
     endDate: "2026-08-31",
+    minimumStay: "4-8 weeks",
+    minimumStayWeeks: 4,
     window: "July 2026, 4-8 weeks",
     details: "20/week. Bed + breakfast. Work exchange.",
     startMonth: "July 2026",
     duration: "4-8 weeks",
     hours: "20/week",
+    hoursPerWeek: "20/week",
     housing: "Bed included",
+    housingIncluded: true,
     meals: "Breakfast included",
+    mealsIncluded: true,
     type: "Work exchange",
-    status: "Sample pilot listing",
+    compensation: "Work exchange",
+    languages: ["English"],
+    status: "Pilot listing",
+    sample: true,
+    pilot: true,
   },
   {
+    id: "sample-events-costa-rica",
     name: "Social Events Crew",
+    role: "Social Events Crew",
+    hostelName: "Sample Costa Rica Hostel",
+    city: "Costa Rica",
+    country: "Costa Rica",
     location: "Costa Rica",
     roles: ["Events", "Guest experience"],
     startDate: "2026-08-01",
     endDate: "2026-11-30",
+    minimumStay: "1-3 months",
+    minimumStayWeeks: 4,
     window: "August 2026, 1-3 months",
     details: "20-25/week. Dorm bed included. Work exchange.",
     startMonth: "August 2026",
     duration: "1-3 months",
     hours: "20-25/week",
+    hoursPerWeek: "20-25/week",
     housing: "Dorm bed included",
+    housingIncluded: true,
     meals: "Confirm with hostel",
+    mealsIncluded: false,
     type: "Work exchange",
-    status: "Sample pilot listing",
+    compensation: "Work exchange",
+    languages: ["English", "Spanish helpful"],
+    status: "Pilot listing",
+    sample: true,
+    pilot: true,
   },
   {
+    id: "sample-surf-ericeira",
     name: "Surf Hostel All-Rounder",
+    role: "Surf Hostel All-Rounder",
+    hostelName: "Sample Surf Hostel",
+    city: "Ericeira",
+    country: "Portugal",
     location: "Ericeira, Portugal",
     roles: ["Reception", "Cleaning", "Events"],
     startDate: "2026-06-01",
     endDate: "2026-08-31",
+    minimumStay: "6-10 weeks",
+    minimumStayWeeks: 6,
     window: "June 2026, 6-10 weeks",
     details: "25/week. Bed included. Paid + housing.",
     startMonth: "June 2026",
     duration: "6-10 weeks",
     hours: "25/week",
+    hoursPerWeek: "25/week",
     housing: "Bed included",
+    housingIncluded: true,
     meals: "Confirm with hostel",
+    mealsIncluded: false,
     type: "Paid + housing",
-    status: "Sample pilot listing",
+    compensation: "Paid + housing",
+    languages: ["English", "Portuguese helpful"],
+    status: "Pilot listing",
+    sample: true,
+    pilot: true,
   },
   {
+    id: "sample-night-amsterdam",
     name: "Night Reception",
+    role: "Night Reception",
+    hostelName: "Sample Amsterdam Hostel",
+    city: "Amsterdam",
+    country: "Netherlands",
     location: "Amsterdam, Netherlands",
     roles: ["Reception", "Night shift"],
     startDate: "2026-09-01",
     endDate: "2027-01-31",
+    minimumStay: "2-4 months",
+    minimumStayWeeks: 8,
     window: "September 2026, 2-4 months",
     details: "24/week. Staff room included. Paid.",
     startMonth: "September 2026",
     duration: "2-4 months",
     hours: "24/week",
+    hoursPerWeek: "24/week",
     housing: "Staff room included",
+    housingIncluded: true,
     meals: "Confirm with hostel",
+    mealsIncluded: false,
     type: "Paid",
-    status: "Sample pilot listing",
+    compensation: "Paid",
+    languages: ["English", "Dutch helpful"],
+    status: "Pilot listing",
+    sample: true,
+    pilot: true,
   },
   {
+    id: "sample-housekeeping-queenstown",
     name: "Housekeeping & Breakfast Support",
+    role: "Housekeeping & Breakfast Support",
+    hostelName: "Sample Queenstown Hostel",
+    city: "Queenstown",
+    country: "New Zealand",
     location: "Queenstown, New Zealand",
     roles: ["Housekeeping", "Breakfast", "Cleaning"],
     startDate: "2026-11-01",
     endDate: "2027-02-28",
+    minimumStay: "2-3 months",
+    minimumStayWeeks: 8,
     window: "November 2026, 2-3 months",
     details: "20/week. Bed + breakfast. Exchange.",
     startMonth: "November 2026",
     duration: "2-3 months",
     hours: "20/week",
+    hoursPerWeek: "20/week",
     housing: "Bed included",
+    housingIncluded: true,
     meals: "Breakfast included",
+    mealsIncluded: true,
     type: "Exchange",
-    status: "Sample pilot listing",
+    compensation: "Exchange",
+    languages: ["English"],
+    status: "Pilot listing",
+    sample: true,
+    pilot: true,
   },
   {
+    id: "sample-bar-budapest",
     name: "Bar / Events Assistant",
+    role: "Bar / Events Assistant",
+    hostelName: "Sample Budapest Hostel",
+    city: "Budapest",
+    country: "Hungary",
     location: "Budapest, Hungary",
     roles: ["Bar", "Events"],
     startDate: "2026-07-01",
     endDate: "2026-09-30",
+    minimumStay: "1-2 months",
+    minimumStayWeeks: 4,
     window: "July 2026, 1-2 months",
     details: "20/week. Dorm bed included. Paid trial / exchange.",
     startMonth: "July 2026",
     duration: "1-2 months",
     hours: "20/week",
+    hoursPerWeek: "20/week",
     housing: "Dorm bed included",
+    housingIncluded: true,
     meals: "Confirm with hostel",
+    mealsIncluded: false,
     type: "Paid trial / exchange",
-    status: "Sample pilot listing",
+    compensation: "Paid trial / exchange",
+    languages: ["English"],
+    status: "Pilot listing",
+    sample: true,
+    pilot: true,
   },
 ];
 
@@ -293,6 +378,7 @@ function formProfile(form) {
     preferredRegions: type === "worker" ? String(formData.get("preferredRegions") || "").trim() : "",
     workStyle: type === "worker" ? String(formData.get("workStyle") || "").trim() : "",
     portfolio: type === "worker" ? String(formData.get("portfolio") || "").trim() : "",
+    workEligibilityAcknowledged: type === "worker" ? Boolean(formData.get("workEligibilityAcknowledged")) : false,
   };
   return profile;
 }
@@ -404,6 +490,9 @@ function fillProfileForm(account) {
   profileForm.elements.preferredRegions.value = account.type === "worker" ? displayList(profile.preferredRegions) : "";
   profileForm.elements.workStyle.value = account.type === "worker" ? profile.workStyle || "" : "";
   profileForm.elements.portfolio.value = account.type === "worker" ? profile.portfolio || "" : "";
+  if (profileForm.elements.workEligibilityAcknowledged) {
+    profileForm.elements.workEligibilityAcknowledged.checked = account.type === "worker" && Boolean(profile.workEligibilityAcknowledged);
+  }
   profileForm.elements.photoData.value = profile.photo || "";
   profileForm.elements.photosData.value = JSON.stringify(Array.isArray(profile.photos) ? profile.photos.slice(0, 10) : []);
   syncPlanOptions(account.type, profileForm.elements.plan);
@@ -425,28 +514,91 @@ function renderAvatar(profile) {
   avatar.textContent = (profile.name || "H").trim().slice(0, 1).toUpperCase();
 }
 
-function profileCompletion(profile) {
+function profileCompletionDetails(profile = {}) {
   const checks = [
-    profile.photo,
-    profile.headline,
-    profile.bio,
-    profile.nationality,
-    profile.location,
-    profile.startDate,
-    profile.endDate,
-    profile.workStyle,
-    profile.experience,
-    profile.education,
-    profile.references,
-    profile.portfolio,
-    profileList(profile.tags).length,
-    profileList(profile.languages).length,
-    profileList(profile.previousHostels).length,
-    profileList(profile.workCountries).length,
-    profileList(profile.preferredRegions).length,
-    profileList(profile.certifications).length,
+    ["Profile photo", Boolean(profile.photo)],
+    ["Availability dates", Boolean(profile.startDate || profile.endDate)],
+    ["Preferred countries", profileList(profile.preferredRegions).length > 0],
+    ["Role interests", profileList(profile.tags).length > 0],
+    ["Languages", profileList(profile.languages).length > 0],
+    ["Hostel/hospitality experience", Boolean(profile.experience || profileList(profile.previousHostels).length)],
+    ["Short bio", Boolean(profile.bio)],
+    ["References", Boolean(profile.references)],
+    ["Work eligibility acknowledgment", Boolean(profile.workEligibilityAcknowledged)],
   ];
-  return Math.round((checks.filter(Boolean).length / checks.length) * 100);
+  const completed = checks.filter(([, done]) => done).map(([label]) => label);
+  const missing = checks.filter(([, done]) => !done).map(([label]) => label);
+  return {
+    percent: Math.round((completed.length / checks.length) * 100),
+    completed,
+    missing,
+  };
+}
+
+function profileCompletion(profile) {
+  return profileCompletionDetails(profile).percent;
+}
+
+function isAvailableNow(profile = {}) {
+  if (!profile.startDate) return false;
+  const parts = String(profile.startDate).split("-");
+  if (parts.length !== 3) return false;
+  const start = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const limit = new Date(today);
+  limit.setDate(limit.getDate() + 14);
+  return start >= today && start <= limit;
+}
+
+function verificationBadges(account) {
+  const profile = account.profile || {};
+  if (account.type === "hostel") {
+    return [
+      ["Verified hostel", account.status === "approved" || account.status === "active" || account.status === "paying"],
+      ["Website verified", Boolean(safeExternalUrl(profile.website))],
+      ["Role details confirmed", profileList(profile.tags).length > 0 && Boolean(profile.bio || profile.startDate)],
+      ["Housing details confirmed", /housing|staff room|dorm|bed/i.test(`${profile.bio || ""} ${profile.staffHousingInfo || ""}`)],
+      ["Pilot partner", ["pilot", "active", "paying", "approved"].includes(account.status)],
+    ];
+  }
+  return [
+    ["Email verified", Boolean(account.email)],
+    ["Phone/WhatsApp verified", Boolean(profile.phone || profile.whatsapp)],
+    ["Reference added", Boolean(profile.references)],
+    ["Hostel experience", Boolean(profile.experience || profileList(profile.previousHostels).length)],
+    ["Available now", isAvailableNow(profile)],
+    ["Interviewed by Hoppers", Boolean(profile.verification?.interviewedByHoppers)],
+  ];
+}
+
+function badgeRow(items) {
+  return items
+    .map(
+      ([label, active]) =>
+        `<span class="verification-badge ${active ? "is-active" : "is-muted"}">${active ? "✓" : "+"} ${escapeHtml(label)}</span>`
+    )
+    .join("");
+}
+
+function renderProfileStrength(account) {
+  const target = document.querySelector("#worker-profile-strength");
+  if (!target || account.type !== "worker") return;
+  const details = profileCompletionDetails(account.profile || {});
+  const nextPrompt = details.missing.slice(0, 3).join(", ") || "Keep your profile fresh when your dates change.";
+  target.innerHTML = `
+    <article class="profile-strength-card">
+      <div>
+        <p class="eyebrow">Profile strength</p>
+        <h3>${details.percent}% complete</h3>
+        <p>Add your availability and experience to get more hostel views.</p>
+      </div>
+      <div class="profile-strength-meter" aria-label="Profile completion ${details.percent}%">
+        <span style="width: ${details.percent}%"></span>
+      </div>
+      <p class="profile-strength-next"><strong>Next:</strong> ${escapeHtml(nextPrompt)}</p>
+    </article>
+  `;
 }
 
 function workerAvatarMarkup(profile) {
@@ -476,6 +628,7 @@ function renderWorkerProfile(account) {
   const profile = account.profile || {};
   const completion = profileCompletion(profile);
   const portfolio = safeExternalUrl(profile.portfolio);
+  const badges = badgeRow(verificationBadges(account));
   document.querySelector("#worker-profile-view").innerHTML = `
     <article class="worker-profile-hero">
       <div class="worker-cover"></div>
@@ -490,6 +643,7 @@ function renderWorkerProfile(account) {
             <span>${escapeHtml(profile.nationality || "Nationality not added")}</span>
             <span>${escapeHtml(account.billing?.planLabel || planLabels[profile.plan] || "Plan pending")}</span>
           </div>
+          <div class="verification-badge-row">${badges}</div>
         </div>
         <div class="worker-profile-actions">
           <a class="button button-dark" href="#profile-form">Edit profile</a>
@@ -640,10 +794,10 @@ function renderApplications(applications = []) {
           (application) => `
             <article>
               <div>
-                <strong>${escapeHtml(application.type === "hostel" ? "Hostel profile" : "Worker profile")}</strong>
-                <p>${escapeHtml(application.planLabel || "Plan pending")}</p>
+                <strong>${escapeHtml(application.opening?.role || application.opening?.title || application.opening?.hostelName || "Hoppers application")}</strong>
+                <p>${escapeHtml(application.opening?.hostelName || application.planLabel || "Hoppers review")} · ${escapeHtml(application.opening?.location || "Location pending")}</p>
               </div>
-              <span class="status-pill status-${escapeHtml(application.status)}">${escapeHtml(application.status)}</span>
+              <span class="status-pill status-${escapeHtml(application.status)}">${escapeHtml(statusLabel(application.status))}</span>
             </article>
           `
         )
@@ -679,21 +833,50 @@ function dateRange(startDate, endDate) {
 }
 
 function openingCountry(opening) {
+  if (opening.country) return opening.country;
   const parts = String(opening.location || "").split(",");
   return (parts[parts.length - 1] || "").trim();
 }
 
 function submissionToOpening(submission) {
   const data = submission.data || {};
+  const location = data.location || "Location pending";
+  const parts = String(location)
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
   return {
-    name: data.name || "Approved hostel",
-    location: data.location || "Location pending",
+    id: submission.id,
+    source: submission.source || "submission",
+    hostelAccountId: submission.source === "account" ? submission.id : "",
+    hostelEmail: data.email || "",
+    name: data.role || valuesList(data.roles || data.role)[0] || "Hostel role",
+    role: data.role || valuesList(data.roles || data.role)[0] || "Hostel role",
+    hostelName: data.name || "Approved hostel",
+    location,
+    city: data.city || (parts.length > 1 ? parts.slice(0, -1).join(", ") : parts[0] || ""),
+    country: data.country || (parts.length > 1 ? parts.at(-1) : ""),
     roles: valuesList(data.roles || data.role),
     startDate: data.startDate || "",
     endDate: data.endDate || "",
     window: dateRange(data.startDate, data.endDate),
+    minimumStay: data.minimumStay || data.duration || dateRange(data.startDate, data.endDate),
+    minimumStayWeeks: Number(data.minimumStayWeeks || 0),
+    startMonth: data.startMonth || formatDateOnly(data.startDate) || "Flexible",
+    duration: data.duration || data.minimumStay || "Flexible",
+    hours: data.hoursPerWeek || data.hours || "Confirm with hostel",
+    hoursPerWeek: data.hoursPerWeek || data.hours || "Confirm with hostel",
+    housing: data.housingIncluded ? "Yes" : "Confirm with hostel",
+    housingIncluded: Boolean(data.housingIncluded),
+    meals: data.mealsIncluded ? "Yes" : "Confirm with hostel",
+    mealsIncluded: Boolean(data.mealsIncluded),
+    type: data.compensation || data.type || "Confirm with hostel",
+    compensation: data.compensation || data.type || "Confirm with hostel",
+    languages: valuesList(data.languages || data.languageRequirements, "Confirm with hostel"),
     details: data.description || "Details available after approval",
-    status: "Approved",
+    status: data.pilot ? "Pilot listing" : "Approved",
+    pilot: Boolean(data.pilot),
+    sample: false,
   };
 }
 
@@ -714,42 +897,24 @@ function openingMatchesDates(opening, startDate, endDate) {
 function renderOpeningCard(opening) {
   const id = openingId(opening);
   const saved = savedOpeningIds().includes(id);
-  const detailed = opening.startMonth || opening.duration || opening.hours || opening.type;
   return `
     <article class="account-opening-card">
       <div class="profile-top">
         <div>
-          <h3>${escapeHtml(opening.name)}</h3>
-          <p class="location">+ ${escapeHtml(opening.location)}</p>
+          <h3>${escapeHtml(opening.role || opening.name)}</h3>
+          <p class="location">+ ${escapeHtml(opening.hostelName || "Hostel")} · ${escapeHtml(opening.location)}</p>
         </div>
-        <span class="badge">${escapeHtml(opening.status)}</span>
+        <span class="badge">${escapeHtml(opening.pilot || opening.sample ? "Pilot listing" : opening.status || "Approved")}</span>
       </div>
-      <div class="profile-meta">
-        ${
-          detailed
-            ? `
-              <div><span class="label">Start</span><p>${escapeHtml(opening.startMonth || "Flexible")}</p></div>
-              <div><span class="label">Duration</span><p>${escapeHtml(opening.duration || opening.window || "Flexible")}</p></div>
-              <div><span class="label">Hours</span><p>${escapeHtml(opening.hours || "Confirm with hostel")}</p></div>
-              <div><span class="label">Housing</span><p>${escapeHtml(opening.housing || "Confirm with hostel")}</p></div>
-              <div><span class="label">Meals</span><p>${escapeHtml(opening.meals || "Confirm with hostel")}</p></div>
-              <div><span class="label">Type</span><p>${escapeHtml(opening.type || "Confirm with hostel")}</p></div>
-            `
-            : `
-              <div>
-                <span class="label">Opening window</span>
-                <p>${escapeHtml(opening.window)}</p>
-              </div>
-              <div>
-                <span class="label">Roles open</span>
-                <div class="tag-list">${tagList(opening.roles)}</div>
-              </div>
-              <div>
-                <span class="label">Placement details</span>
-                <p>${escapeHtml(opening.details)}</p>
-              </div>
-            `
-        }
+      <div class="profile-meta listing-meta-grid">
+        <div><span class="label">Start</span><p>${escapeHtml(opening.startMonth || formatDateOnly(opening.startDate) || "Flexible")}</p></div>
+        <div><span class="label">Minimum stay</span><p>${escapeHtml(opening.minimumStay || opening.duration || opening.window || "Flexible")}</p></div>
+        <div><span class="label">Hours/week</span><p>${escapeHtml(opening.hoursPerWeek || opening.hours || "Confirm with hostel")}</p></div>
+        <div><span class="label">Housing</span><p>${escapeHtml(opening.housingIncluded ? "Yes" : opening.housing || "Confirm with hostel")}</p></div>
+        <div><span class="label">Meals</span><p>${escapeHtml(opening.mealsIncluded ? "Yes" : opening.meals || "Confirm with hostel")}</p></div>
+        <div><span class="label">Type</span><p>${escapeHtml(opening.compensation || opening.type || "Confirm with hostel")}</p></div>
+        <div><span class="label">Languages</span><p>${escapeHtml(displayList(opening.languages) || "Confirm with hostel")}</p></div>
+        <div><span class="label">Roles</span><div class="tag-list">${tagList(opening.roles)}</div></div>
       </div>
       <button class="button button-light save-opening" type="button" data-opening-id="${escapeHtml(id)}">
         ${saved ? "Saved" : "Save opening"}
@@ -760,7 +925,7 @@ function renderOpeningCard(opening) {
 }
 
 function openingId(opening) {
-  return `${opening.name}|${opening.location}|${opening.window}`;
+  return opening.id || `${opening.name}|${opening.location}|${opening.window}`;
 }
 
 function savedOpeningKey() {
@@ -806,12 +971,19 @@ function applyOpeningFilters(openings) {
   const country = String(formData.get("country") || "");
   const startDate = String(formData.get("startDate") || "");
   const endDate = String(formData.get("endDate") || "");
+  const housingIncluded = Boolean(formData.get("housingIncluded"));
+  const type = String(formData.get("type") || "").toLowerCase();
+  const minimumStayWeeks = Number(formData.get("minimumStayWeeks") || 0);
   return openings.filter((opening) => {
     const roleMatches =
       !roles.length ||
       roles.some((role) => opening.roles.some((item) => item.toLowerCase() === role || item.toLowerCase().includes(role)));
     const countryMatches = !country || openingCountry(opening) === country;
-    return roleMatches && countryMatches && openingMatchesDates(opening, startDate, endDate);
+    const housingMatches = !housingIncluded || Boolean(opening.housingIncluded);
+    const typeText = String(opening.compensation || opening.type || "").toLowerCase();
+    const typeMatches = !type || typeText.includes(type);
+    const stayMatches = !minimumStayWeeks || !opening.minimumStayWeeks || Number(opening.minimumStayWeeks) <= minimumStayWeeks;
+    return roleMatches && countryMatches && housingMatches && typeMatches && stayMatches && openingMatchesDates(opening, startDate, endDate);
   });
 }
 
@@ -1007,20 +1179,22 @@ function threadMessages(thread) {
 }
 
 function renderWorkerLanding(account) {
+  renderProfileStrength(account);
   const threads = workerThreads(account);
   const applicationList = document.querySelector("#worker-application-list");
   const threadList = document.querySelector("#worker-thread-list");
   const empty = `<p class="empty-state">Applications you submit from opening pages will appear here.</p>`;
-  applicationList.innerHTML = threads.length
-    ? threads
+  const applications = currentApplications.filter((application) => application.source !== "profile_submission");
+  applicationList.innerHTML = applications.length
+    ? applications
         .map(
-          (thread) => `
+          (application) => `
             <article>
               <div>
-                <strong>${escapeHtml(thread.opening?.name || "Hostel opening")}</strong>
-                <p>${escapeHtml(thread.opening?.location || "Location pending")} · ${escapeHtml(formatDateTime(thread.createdAt))}</p>
+                <strong>${escapeHtml(application.opening?.role || application.opening?.title || "Hostel opening")}</strong>
+                <p>${escapeHtml(application.opening?.hostelName || "Hostel")} · ${escapeHtml(application.opening?.location || "Location pending")}</p>
               </div>
-              <a class="text-button" href="${escapeHtml(threadHref(thread))}">View</a>
+              <span class="status-pill status-${escapeHtml(application.status)}">${escapeHtml(statusLabel(application.status))}</span>
             </article>
           `
         )
@@ -1045,9 +1219,59 @@ function renderWorkerLanding(account) {
 
 function renderHostelLanding(account) {
   const list = document.querySelector("#hostel-application-review-list");
+  const badgeTarget = document.querySelector("#hostel-verification-badges");
+  if (badgeTarget) badgeTarget.innerHTML = badgeRow(verificationBadges(account));
+  const applications = currentApplications.filter((application) => application.source !== "profile_submission");
   const threads = hostelThreads(account);
-  list.innerHTML = threads.length
-    ? threads
+  list.innerHTML = applications.length
+    ? applications
+        .map(
+          (application) => `
+            <article class="hostel-review-card">
+              <div>
+                <div class="profile-top">
+                  <div>
+                    <h3>${escapeHtml(application.worker?.name || "Unnamed worker")}</h3>
+                    <p class="location">+ ${escapeHtml(application.opening?.role || "Hostel opening")} · ${escapeHtml(application.opening?.location || "Location pending")}</p>
+                  </div>
+                  <div class="status-stack">
+                    <span class="status-pill status-${escapeHtml(application.status)}">${escapeHtml(statusLabel(application.status))}</span>
+                  </div>
+                </div>
+                <dl class="brief-list compact">
+                  <div>
+                    <dt>Email</dt>
+                    <dd>${escapeHtml(application.worker?.email || application.workerEmail || "No email")}</dd>
+                  </div>
+                  <div>
+                    <dt>Available</dt>
+                    <dd>${escapeHtml(dateRange(application.worker?.startDate, application.worker?.endDate))}</dd>
+                  </div>
+                  <div>
+                    <dt>Roles</dt>
+                    <dd>${escapeHtml(application.worker?.roles || "Roles not listed")}</dd>
+                  </div>
+                  <div>
+                    <dt>Profile complete</dt>
+                    <dd>${escapeHtml(application.worker?.profileCompleteness ?? "Not scored")}%</dd>
+                  </div>
+                  <div>
+                    <dt>First message</dt>
+                    <dd>${escapeHtml(application.message || "No message yet.")}</dd>
+                  </div>
+                </dl>
+              </div>
+              ${
+                application.threadId
+                  ? `<a class="button button-dark" href="./communications.html?thread=${encodeURIComponent(application.threadId)}">Review thread</a>`
+                  : `<span class="badge">Application tracked</span>`
+              }
+            </article>
+          `
+        )
+        .join("")
+    : threads.length
+      ? threads
         .map(
           (thread) => `
             <article class="hostel-review-card ${hasNewMessage(thread, "hostel") ? "has-new-message" : ""}">
@@ -1103,7 +1327,7 @@ function renderHostelLanding(account) {
           `
         )
         .join("")
-    : `<p class="empty-state">Worker applications for this hostel will appear here after they apply to an opening.</p>`;
+      : `<p class="empty-state">Worker applications for this hostel will appear here after they apply to an opening.</p>`;
 }
 
 function renderAccountLanding(account) {
@@ -1168,6 +1392,7 @@ function renderMembership(account) {
 
 function showDashboard(payload) {
   currentAccount = payload.account;
+  currentApplications = payload.applications || [];
   const account = payload.account;
   const profile = account.profile || {};
   authSection.hidden = true;
