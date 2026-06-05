@@ -61,6 +61,105 @@ const hostelProfiles = [
   },
 ];
 
+const samplePilotOpenings = [
+  {
+    name: "Reception Helper",
+    location: "Lisbon, Portugal",
+    needs: ["Reception", "Guest support"],
+    startMonth: "July 2026",
+    duration: "4-8 weeks",
+    hours: "20/week",
+    housing: "Bed included",
+    meals: "Breakfast included",
+    type: "Work exchange",
+    stay: "July 2026, 4-8 weeks",
+    benefits: "Bed + breakfast",
+    details: "Sample pilot listing for reception and guest support.",
+    verified: false,
+    sample: true,
+  },
+  {
+    name: "Social Events Crew",
+    location: "Costa Rica",
+    needs: ["Events", "Guest experience"],
+    startMonth: "August 2026",
+    duration: "1-3 months",
+    hours: "20-25/week",
+    housing: "Dorm bed included",
+    meals: "Confirm with hostel",
+    type: "Work exchange",
+    stay: "August 2026, 1-3 months",
+    benefits: "Dorm bed",
+    details: "Sample pilot listing for social events and guest energy.",
+    verified: false,
+    sample: true,
+  },
+  {
+    name: "Surf Hostel All-Rounder",
+    location: "Ericeira, Portugal",
+    needs: ["Reception", "Cleaning", "Events"],
+    startMonth: "June 2026",
+    duration: "6-10 weeks",
+    hours: "25/week",
+    housing: "Bed included",
+    meals: "Confirm with hostel",
+    type: "Paid + housing",
+    stay: "June 2026, 6-10 weeks",
+    benefits: "Paid + housing",
+    details: "Sample pilot listing for an all-rounder at a surf hostel.",
+    verified: false,
+    sample: true,
+  },
+  {
+    name: "Night Reception",
+    location: "Amsterdam, Netherlands",
+    needs: ["Reception", "Night shift"],
+    startMonth: "September 2026",
+    duration: "2-4 months",
+    hours: "24/week",
+    housing: "Staff room included",
+    meals: "Confirm with hostel",
+    type: "Paid",
+    stay: "September 2026, 2-4 months",
+    benefits: "Paid role, staff room",
+    details: "Sample pilot listing for night reception support.",
+    verified: false,
+    sample: true,
+  },
+  {
+    name: "Housekeeping & Breakfast Support",
+    location: "Queenstown, New Zealand",
+    needs: ["Housekeeping", "Breakfast", "Cleaning"],
+    startMonth: "November 2026",
+    duration: "2-3 months",
+    hours: "20/week",
+    housing: "Bed included",
+    meals: "Breakfast included",
+    type: "Exchange",
+    stay: "November 2026, 2-3 months",
+    benefits: "Bed + breakfast",
+    details: "Sample pilot listing for housekeeping and breakfast support.",
+    verified: false,
+    sample: true,
+  },
+  {
+    name: "Bar / Events Assistant",
+    location: "Budapest, Hungary",
+    needs: ["Bar", "Events"],
+    startMonth: "July 2026",
+    duration: "1-2 months",
+    hours: "20/week",
+    housing: "Dorm bed included",
+    meals: "Confirm with hostel",
+    type: "Paid trial / exchange",
+    stay: "July 2026, 1-2 months",
+    benefits: "Dorm bed, paid trial / exchange",
+    details: "Sample pilot listing for bar and events support.",
+    verified: false,
+    sample: true,
+  },
+];
+
 const workerGrid = document.querySelector("#worker-grid");
 const hostelGrid = document.querySelector("#hostel-grid");
 const openingGrid = document.querySelector("#opening-grid");
@@ -193,6 +292,7 @@ function renderHostel(profile) {
 }
 
 function renderOpening(profile) {
+  const isDetailed = profile.startMonth || profile.duration || profile.hours || profile.type;
   return `
     <article class="profile-card opening-card">
       <div class="profile-card-inner">
@@ -201,23 +301,36 @@ function renderOpening(profile) {
             <h3>${escapeHtml(profile.name)}</h3>
             <p class="location">+ ${escapeHtml(profile.location)}</p>
           </div>
-          <span class="badge">${profile.verified ? "Approved" : "Reviewing"}</span>
+          <span class="badge">${profile.sample ? "Sample pilot listing" : profile.verified ? "Approved" : "Reviewing"}</span>
         </div>
         <div class="profile-meta">
-          <div>
-            <span class="label">Opening window</span>
-            <p>${escapeHtml(profile.stay)}</p>
-          </div>
-          <div>
-            <span class="label">Roles open</span>
-            <div class="tag-list">${tagList(profile.needs)}</div>
-          </div>
-          <div>
-            <span class="label">Placement details</span>
-            <p>${escapeHtml(profile.benefits)}</p>
-          </div>
+          ${
+            isDetailed
+              ? `
+                <div><span class="label">Start</span><p>${escapeHtml(profile.startMonth || "Flexible")}</p></div>
+                <div><span class="label">Duration</span><p>${escapeHtml(profile.duration || profile.stay || "Flexible")}</p></div>
+                <div><span class="label">Hours</span><p>${escapeHtml(profile.hours || "Confirm with hostel")}</p></div>
+                <div><span class="label">Housing</span><p>${escapeHtml(profile.housing || "Confirm with hostel")}</p></div>
+                <div><span class="label">Meals</span><p>${escapeHtml(profile.meals || "Confirm with hostel")}</p></div>
+                <div><span class="label">Type</span><p>${escapeHtml(profile.type || "Confirm with hostel")}</p></div>
+              `
+              : `
+                <div>
+                  <span class="label">Opening window</span>
+                  <p>${escapeHtml(profile.stay)}</p>
+                </div>
+                <div>
+                  <span class="label">Roles open</span>
+                  <div class="tag-list">${tagList(profile.needs)}</div>
+                </div>
+                <div>
+                  <span class="label">Placement details</span>
+                  <p>${escapeHtml(profile.benefits)}</p>
+                </div>
+              `
+          }
         </div>
-        <a class="opening-link" href="${escapeHtml(openingLink(profile))}">View opening</a>
+        <a class="opening-link" href="${escapeHtml(openingLink(profile))}">Apply</a>
       </div>
     </article>
   `;
@@ -282,10 +395,10 @@ async function renderOpenings() {
   try {
     const { hostels } = await fetchJson("/api/published/hostels");
     const approvedHostels = hostels.map(submissionToHostel);
-    const openings = approvedHostels.length ? approvedHostels : hostelProfiles;
+    const openings = approvedHostels.length ? approvedHostels : samplePilotOpenings;
     openingGrid.innerHTML = openings.slice(0, 4).map(renderOpening).join("");
   } catch {
-    openingGrid.innerHTML = hostelProfiles.slice(0, 4).map(renderOpening).join("");
+    openingGrid.innerHTML = samplePilotOpenings.slice(0, 4).map(renderOpening).join("");
   }
 }
 
@@ -295,20 +408,20 @@ async function renderPublicOpenings() {
   try {
     const { hostels } = await fetchJson("/api/published/hostels");
     const approvedHostels = hostels.map(submissionToHostel);
-    const openings = approvedHostels.length ? approvedHostels : hostelProfiles;
+    const openings = approvedHostels;
     populatePublicOpeningCountries(openings);
     const renderFiltered = () => {
       const filtered = filterOpenings(openings, publicOpeningFilters);
       publicOpeningGrid.innerHTML = filtered.length
         ? filtered.map(renderOpening).join("")
-        : `<p class="empty-state">No openings match those filters yet.</p>`;
+        : `<p class="empty-state">Real approved hostel openings will appear here as the pilot opens.</p>`;
     };
     publicOpeningFilters.addEventListener("input", renderFiltered);
     publicOpeningFilters.addEventListener("change", renderFiltered);
     renderFiltered();
   } catch {
-    populatePublicOpeningCountries(hostelProfiles);
-    publicOpeningGrid.innerHTML = hostelProfiles.map(renderOpening).join("");
+    populatePublicOpeningCountries([]);
+    publicOpeningGrid.innerHTML = `<p class="empty-state">Real approved hostel openings will appear here as the pilot opens.</p>`;
   }
 }
 

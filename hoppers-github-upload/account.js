@@ -81,34 +81,100 @@ const countries = [
 
 const fallbackOpenings = [
   {
-    name: "Alpine Base Hostel",
-    location: "Interlaken, Switzerland",
-    roles: ["Housekeeping", "Breakfast", "Reception"],
-    startDate: "",
-    endDate: "",
-    window: "Short-term or seasonal",
-    details: "Staff bed, breakfast, discounts",
-    status: "Approved",
+    name: "Reception Helper",
+    location: "Lisbon, Portugal",
+    roles: ["Reception", "Guest support"],
+    startDate: "2026-07-01",
+    endDate: "2026-08-31",
+    window: "July 2026, 4-8 weeks",
+    details: "20/week. Bed + breakfast. Work exchange.",
+    startMonth: "July 2026",
+    duration: "4-8 weeks",
+    hours: "20/week",
+    housing: "Bed included",
+    meals: "Breakfast included",
+    type: "Work exchange",
+    status: "Sample pilot listing",
   },
   {
-    name: "Canal House Hostel",
+    name: "Social Events Crew",
+    location: "Costa Rica",
+    roles: ["Events", "Guest experience"],
+    startDate: "2026-08-01",
+    endDate: "2026-11-30",
+    window: "August 2026, 1-3 months",
+    details: "20-25/week. Dorm bed included. Work exchange.",
+    startMonth: "August 2026",
+    duration: "1-3 months",
+    hours: "20-25/week",
+    housing: "Dorm bed included",
+    meals: "Confirm with hostel",
+    type: "Work exchange",
+    status: "Sample pilot listing",
+  },
+  {
+    name: "Surf Hostel All-Rounder",
+    location: "Ericeira, Portugal",
+    roles: ["Reception", "Cleaning", "Events"],
+    startDate: "2026-06-01",
+    endDate: "2026-08-31",
+    window: "June 2026, 6-10 weeks",
+    details: "25/week. Bed included. Paid + housing.",
+    startMonth: "June 2026",
+    duration: "6-10 weeks",
+    hours: "25/week",
+    housing: "Bed included",
+    meals: "Confirm with hostel",
+    type: "Paid + housing",
+    status: "Sample pilot listing",
+  },
+  {
+    name: "Night Reception",
     location: "Amsterdam, Netherlands",
-    roles: ["Reception", "Events", "Night shift"],
-    startDate: "",
-    endDate: "",
-    window: "Seasonal or longer-term",
-    details: "Paid hourly role, staff meals",
-    status: "Approved",
+    roles: ["Reception", "Night shift"],
+    startDate: "2026-09-01",
+    endDate: "2027-01-31",
+    window: "September 2026, 2-4 months",
+    details: "24/week. Staff room included. Paid.",
+    startMonth: "September 2026",
+    duration: "2-4 months",
+    hours: "24/week",
+    housing: "Staff room included",
+    meals: "Confirm with hostel",
+    type: "Paid",
+    status: "Sample pilot listing",
   },
   {
-    name: "Sunset Surf Hostel",
-    location: "Lagos, Portugal",
-    roles: ["Bar", "Tours", "Social media"],
-    startDate: "",
-    endDate: "",
-    window: "Short-term trial or longer stay",
-    details: "Accommodation, breakfast, surf discounts",
-    status: "Reviewing",
+    name: "Housekeeping & Breakfast Support",
+    location: "Queenstown, New Zealand",
+    roles: ["Housekeeping", "Breakfast", "Cleaning"],
+    startDate: "2026-11-01",
+    endDate: "2027-02-28",
+    window: "November 2026, 2-3 months",
+    details: "20/week. Bed + breakfast. Exchange.",
+    startMonth: "November 2026",
+    duration: "2-3 months",
+    hours: "20/week",
+    housing: "Bed included",
+    meals: "Breakfast included",
+    type: "Exchange",
+    status: "Sample pilot listing",
+  },
+  {
+    name: "Bar / Events Assistant",
+    location: "Budapest, Hungary",
+    roles: ["Bar", "Events"],
+    startDate: "2026-07-01",
+    endDate: "2026-09-30",
+    window: "July 2026, 1-2 months",
+    details: "20/week. Dorm bed included. Paid trial / exchange.",
+    startMonth: "July 2026",
+    duration: "1-2 months",
+    hours: "20/week",
+    housing: "Dorm bed included",
+    meals: "Confirm with hostel",
+    type: "Paid trial / exchange",
+    status: "Sample pilot listing",
   },
 ];
 
@@ -219,6 +285,7 @@ function formProfile(form) {
     headline: type === "worker" ? String(formData.get("headline") || "").trim() : "",
     languages: type === "worker" ? String(formData.get("languages") || "").trim() : "",
     previousHostels: type === "worker" ? String(formData.get("previousHostels") || "").trim() : "",
+    workCountries: type === "worker" ? String(formData.get("workCountries") || "").trim() : "",
     experience: type === "worker" ? String(formData.get("experience") || "").trim() : "",
     education: type === "worker" ? String(formData.get("education") || "").trim() : "",
     certifications: type === "worker" ? String(formData.get("certifications") || "").trim() : "",
@@ -329,6 +396,7 @@ function fillProfileForm(account) {
   profileForm.elements.headline.value = account.type === "worker" ? profile.headline || "" : "";
   profileForm.elements.languages.value = account.type === "worker" ? displayList(profile.languages) : "";
   profileForm.elements.previousHostels.value = account.type === "worker" ? displayList(profile.previousHostels) : "";
+  profileForm.elements.workCountries.value = account.type === "worker" ? displayList(profile.workCountries) : "";
   profileForm.elements.experience.value = account.type === "worker" ? profile.experience || "" : "";
   profileForm.elements.education.value = account.type === "worker" ? profile.education || "" : "";
   profileForm.elements.certifications.value = account.type === "worker" ? displayList(profile.certifications) : "";
@@ -374,6 +442,7 @@ function profileCompletion(profile) {
     profileList(profile.tags).length,
     profileList(profile.languages).length,
     profileList(profile.previousHostels).length,
+    profileList(profile.workCountries).length,
     profileList(profile.preferredRegions).length,
     profileList(profile.certifications).length,
   ];
@@ -482,6 +551,10 @@ function renderWorkerProfile(account) {
           <div>
             <dt>Preferred regions</dt>
             <dd>${profileList(profile.preferredRegions).length ? escapeHtml(displayList(profile.preferredRegions)) : "Open to the right fit"}</dd>
+          </div>
+          <div>
+            <dt>Can legally work in</dt>
+            <dd>${profileList(profile.workCountries).length ? escapeHtml(displayList(profile.workCountries)) : "Not added yet"}</dd>
           </div>
         </dl>
       </section>
@@ -641,6 +714,7 @@ function openingMatchesDates(opening, startDate, endDate) {
 function renderOpeningCard(opening) {
   const id = openingId(opening);
   const saved = savedOpeningIds().includes(id);
+  const detailed = opening.startMonth || opening.duration || opening.hours || opening.type;
   return `
     <article class="account-opening-card">
       <div class="profile-top">
@@ -651,18 +725,31 @@ function renderOpeningCard(opening) {
         <span class="badge">${escapeHtml(opening.status)}</span>
       </div>
       <div class="profile-meta">
-        <div>
-          <span class="label">Opening window</span>
-          <p>${escapeHtml(opening.window)}</p>
-        </div>
-        <div>
-          <span class="label">Roles open</span>
-          <div class="tag-list">${tagList(opening.roles)}</div>
-        </div>
-        <div>
-          <span class="label">Placement details</span>
-          <p>${escapeHtml(opening.details)}</p>
-        </div>
+        ${
+          detailed
+            ? `
+              <div><span class="label">Start</span><p>${escapeHtml(opening.startMonth || "Flexible")}</p></div>
+              <div><span class="label">Duration</span><p>${escapeHtml(opening.duration || opening.window || "Flexible")}</p></div>
+              <div><span class="label">Hours</span><p>${escapeHtml(opening.hours || "Confirm with hostel")}</p></div>
+              <div><span class="label">Housing</span><p>${escapeHtml(opening.housing || "Confirm with hostel")}</p></div>
+              <div><span class="label">Meals</span><p>${escapeHtml(opening.meals || "Confirm with hostel")}</p></div>
+              <div><span class="label">Type</span><p>${escapeHtml(opening.type || "Confirm with hostel")}</p></div>
+            `
+            : `
+              <div>
+                <span class="label">Opening window</span>
+                <p>${escapeHtml(opening.window)}</p>
+              </div>
+              <div>
+                <span class="label">Roles open</span>
+                <div class="tag-list">${tagList(opening.roles)}</div>
+              </div>
+              <div>
+                <span class="label">Placement details</span>
+                <p>${escapeHtml(opening.details)}</p>
+              </div>
+            `
+        }
       </div>
       <button class="button button-light save-opening" type="button" data-opening-id="${escapeHtml(id)}">
         ${saved ? "Saved" : "Save opening"}

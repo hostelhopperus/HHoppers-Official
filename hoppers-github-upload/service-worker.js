@@ -1,4 +1,4 @@
-const CACHE_NAME = "hoppers-app-v1";
+const CACHE_NAME = "hoppers-app-v2";
 const APP_SHELL = [
   "/",
   "/index.html",
@@ -10,6 +10,7 @@ const APP_SHELL = [
   "/communications.html",
   "/communications.js",
   "/find-hostels.html",
+  "/post-listing.html",
   "/opening-apply.html",
   "/opening-apply.js",
   "/assets/hostel-hero.png",

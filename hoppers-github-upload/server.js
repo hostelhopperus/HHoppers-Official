@@ -2,6 +2,7 @@ const http = require("node:http");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const crypto = require("node:crypto");
+const tls = require("node:tls");
 
 loadEnv();
 
@@ -313,6 +314,17 @@ function hashResetToken(token) {
 
 function resetTokenExpired(reset) {
   return !reset?.expiresAt || new Date(reset.expiresAt).getTime() <= Date.now();
+}
+
+function cleanRecoveryText(value, maxLength = 400) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, maxLength);
+}
+
+function normalizedLookup(value) {
+  return cleanRecoveryText(value).toLowerCase();
 }
 
 function sanitizeAccountProfile(input, type, existing = {}) {
@@ -802,11 +814,65 @@ async function listAdminActions() {
 async function adminStats() {
   const actions = await listAdminActions();
   const deleted = actions.filter((action) => action.action === "account_deleted");
+  const recovery = actions.filter((action) => action.action === "account_recovery_requested");
   return {
     deletedAccounts: deleted.length,
     deletedWorkers: deleted.filter((action) => action.metadata?.accountType === "worker").length,
     deletedHostels: deleted.filter((action) => action.metadata?.accountType === "hostel").length,
+    recoveryRequests: recovery.length,
   };
+}
+
+async function findRecoveryAccount({ email = "", type = "", profileName = "" }) {
+  const normalizedEmail = normalizeEmail(email);
+  if (normalizedEmail) return findAccountByEmail(normalizedEmail);
+
+  const requestedType = type === "hostel" || type === "worker" ? type : "";
+  const requestedName = normalizedLookup(profileName);
+  if (!requestedName) return null;
+
+  const accounts = await listAccounts();
+  const matches = accounts.filter((account) => {
+    if (requestedType && account.type !== requestedType) return false;
+    return normalizedLookup(account.profile?.name) === requestedName;
+  });
+  return matches.length === 1 ? matches[0] : null;
+}
+
+async function logRecoveryRequest(req, { requestType, email = "", accountType = "", profileName = "", contact = "", details = "" }) {
+  const account = await findRecoveryAccount({ email, type: accountType, profileName });
+  return logAdminAction({
+    action: "account_recovery_requested",
+    accountId: account?.id || null,
+    targetEmail: account?.email || email,
+    metadata: {
+      requestType,
+      accountType,
+      submittedEmail: normalizeEmail(email),
+      profileName: cleanRecoveryText(profileName, 120),
+      contact: cleanRecoveryText(contact, 120),
+      details: cleanRecoveryText(details, 900),
+      matchedAccountId: account?.id || null,
+      matchedAccountType: account?.type || "",
+      matchedAccountName: account?.profile?.name || "",
+      requestedIp: clientIp(req),
+    },
+  });
+}
+
+async function adminRecoveryRequests() {
+  const actions = (await listAdminActions()).filter((action) => action.action === "account_recovery_requested");
+  const accountIds = new Set(actions.map((action) => action.accountId).filter(Boolean));
+  const accounts = accountIds.size ? await listAccounts() : [];
+  const accountById = new Map(accounts.map((account) => [account.id, publicAccount(account)]));
+  return actions.slice(0, 100).map((action) => ({
+    id: action.id,
+    createdAt: action.createdAt,
+    accountId: action.accountId,
+    targetEmail: action.targetEmail,
+    metadata: action.metadata || {},
+    account: action.accountId ? accountById.get(action.accountId) || null : null,
+  }));
 }
 
 function submissionBelongsToAccount(submission, account) {
@@ -1363,7 +1429,9 @@ async function handleStripeWebhook(req, res) {
 }
 
 async function sendLiveEmail({ to, subject, body }) {
-  if (!process.env.RESEND_API_KEY) return null;
+  const provider = emailProvider();
+  if (provider === "smtp") return sendSmtpEmail({ to, subject, body });
+  if (provider !== "resend") return null;
   const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
@@ -1380,6 +1448,154 @@ async function sendLiveEmail({ to, subject, body }) {
   const result = await response.json();
   if (!response.ok) throw new Error(result.message || "Email provider request failed");
   return result;
+}
+
+function smtpSettings() {
+  const user = process.env.SMTP_USER || process.env.GMAIL_USER || process.env.GMAIL_EMAIL;
+  const pass = String(process.env.SMTP_PASS || process.env.SMTP_PASSWORD || process.env.GMAIL_APP_PASSWORD || "").replace(/\s+/g, "");
+  const host = process.env.SMTP_HOST || (user && user.endsWith("@gmail.com") ? "smtp.gmail.com" : "");
+  const port = Number(process.env.SMTP_PORT || 465);
+  if (!host || !user || !pass) return null;
+  return {
+    host,
+    port,
+    user,
+    pass,
+    from: process.env.EMAIL_FROM || `Hoppers <${user}>`,
+  };
+}
+
+function emailProvider() {
+  if (smtpSettings()) return "smtp";
+  if (process.env.RESEND_API_KEY) return "resend";
+  return "local-outbox";
+}
+
+function sanitizeMailHeader(value) {
+  return String(value || "").replace(/[\r\n]+/g, " ").trim();
+}
+
+function emailAddressFromHeader(value) {
+  const text = sanitizeMailHeader(value);
+  const bracketed = text.match(/<([^<>]+)>/);
+  return (bracketed ? bracketed[1] : text).trim();
+}
+
+function createSmtpReader(socket) {
+  let buffer = "";
+  let current = [];
+  const responses = [];
+  const waiters = [];
+
+  function flushWaiter() {
+    const waiter = waiters.shift();
+    if (waiter) waiter.resolve(responses.shift());
+  }
+
+  socket.on("data", (chunk) => {
+    buffer += chunk;
+    let lineEnd = buffer.indexOf("\n");
+    while (lineEnd >= 0) {
+      const line = buffer.slice(0, lineEnd).replace(/\r$/, "");
+      buffer = buffer.slice(lineEnd + 1);
+      current.push(line);
+      if (/^\d{3}(?:\s|$)/.test(line)) {
+        responses.push(current.join("\n"));
+        current = [];
+        flushWaiter();
+      }
+      lineEnd = buffer.indexOf("\n");
+    }
+  });
+
+  socket.on("error", (error) => {
+    while (waiters.length) waiters.shift().reject(error);
+  });
+
+  socket.on("close", () => {
+    while (waiters.length) waiters.shift().reject(new Error("SMTP connection closed before the mail server responded"));
+  });
+
+  return function readResponse() {
+    if (responses.length) return Promise.resolve(responses.shift());
+    return new Promise((resolve, reject) => waiters.push({ resolve, reject }));
+  };
+}
+
+async function smtpCommand(socket, readResponse, command, expectedCodes) {
+  socket.write(`${command}\r\n`);
+  const response = await readResponse();
+  const code = Number(response.slice(0, 3));
+  if (!expectedCodes.includes(code)) {
+    throw new Error(`SMTP rejected ${command.split(" ")[0]}: ${response}`);
+  }
+  return response;
+}
+
+function dotStuff(body) {
+  return String(body || "")
+    .replace(/\r\n/g, "\n")
+    .replace(/\r/g, "\n")
+    .split("\n")
+    .map((line) => (line.startsWith(".") ? `.${line}` : line))
+    .join("\r\n");
+}
+
+async function sendSmtpEmail({ to, subject, body }) {
+  const settings = smtpSettings();
+  if (!settings) return null;
+
+  const socket = await new Promise((resolve, reject) => {
+    const client = tls.connect(
+      {
+        host: settings.host,
+        port: settings.port,
+        servername: settings.host,
+        rejectUnauthorized: true,
+      },
+      () => resolve(client)
+    );
+    client.once("error", reject);
+    client.setTimeout(15000, () => {
+      client.destroy(new Error("SMTP connection timed out"));
+    });
+  });
+
+  const readResponse = createSmtpReader(socket);
+  const fromAddress = emailAddressFromHeader(settings.from);
+  const messageId = `<${crypto.randomUUID()}@hhopperr.com>`;
+  const headers = [
+    `From: ${sanitizeMailHeader(settings.from)}`,
+    `To: ${sanitizeMailHeader(to)}`,
+    `Subject: ${sanitizeMailHeader(subject)}`,
+    `Date: ${new Date().toUTCString()}`,
+    `Message-ID: ${messageId}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/plain; charset=utf-8",
+    "Content-Transfer-Encoding: 8bit",
+  ].join("\r\n");
+
+  try {
+    const greeting = await readResponse();
+    if (Number(greeting.slice(0, 3)) !== 220) throw new Error(`SMTP greeting failed: ${greeting}`);
+    await smtpCommand(socket, readResponse, "EHLO hhopperr.com", [250]);
+    await smtpCommand(
+      socket,
+      readResponse,
+      `AUTH PLAIN ${Buffer.from(`\u0000${settings.user}\u0000${settings.pass}`).toString("base64")}`,
+      [235]
+    );
+    await smtpCommand(socket, readResponse, `MAIL FROM:<${fromAddress}>`, [250]);
+    await smtpCommand(socket, readResponse, `RCPT TO:<${emailAddressFromHeader(to)}>`, [250, 251]);
+    await smtpCommand(socket, readResponse, "DATA", [354]);
+    socket.write(`${headers}\r\n\r\n${dotStuff(body)}\r\n.\r\n`);
+    const dataResponse = await readResponse();
+    if (Number(dataResponse.slice(0, 3)) !== 250) throw new Error(`SMTP rejected message: ${dataResponse}`);
+    await smtpCommand(socket, readResponse, "QUIT", [221]);
+    return { id: messageId, provider: "smtp" };
+  } finally {
+    socket.end();
+  }
 }
 
 async function queueEmail({ to, subject, body }) {
@@ -1494,7 +1710,7 @@ async function handleApi(req, res, pathname) {
       storage: useSupabase() ? "supabase" : "local-json",
       accountStorage: accountStorageStatus(),
       payments: process.env.STRIPE_SECRET_KEY ? "stripe" : "local-demo",
-      email: process.env.RESEND_API_KEY ? "resend" : "local-outbox",
+      email: emailProvider(),
     });
     return true;
   }
@@ -1505,7 +1721,7 @@ async function handleApi(req, res, pathname) {
       storage: useSupabase() ? "supabase" : "local-json",
       accountStorage: accountStorageStatus(),
       payments: process.env.STRIPE_SECRET_KEY ? "stripe" : "pre-stripe",
-      email: process.env.RESEND_API_KEY ? "resend" : "local-outbox",
+      email: emailProvider(),
     });
     return true;
   }
@@ -1520,23 +1736,67 @@ async function handleApi(req, res, pathname) {
     return true;
   }
 
-  if (pathname === "/api/account/forgot" && req.method === "POST") {
-    if (!rateLimit(req, "account-forgot", 8, 15 * 60 * 1000)) {
-      json(res, 429, { error: "Too many reset requests. Try again later." });
-      return true;
-    }
-    const body = await readBody(req);
-    const email = normalizeEmail(body.email);
-    if (email && email.includes("@")) {
-      const account = await findAccountByEmail(email);
-      if (account) await createPasswordResetForAccount(req, account, "account");
-    }
-    json(res, 200, {
-      ok: true,
-      message: "If that email is on Hoppers, we sent the login email and password reset link.",
-    });
-    return true;
-  }
+	  if (pathname === "/api/account/forgot" && req.method === "POST") {
+	    if (!rateLimit(req, "account-forgot", 8, 15 * 60 * 1000)) {
+	      json(res, 429, { error: "Too many reset requests. Try again later." });
+	      return true;
+	    }
+	    const body = await readBody(req);
+	    const email = normalizeEmail(body.email);
+	    if (email && email.includes("@")) {
+	      const account = await findAccountByEmail(email);
+	      if (account) await createPasswordResetForAccount(req, account, "account");
+	      await logRecoveryRequest(req, {
+	        requestType: "password",
+	        email,
+	        accountType: account?.type || "",
+	        profileName: account?.profile?.name || "",
+	        details: "Password reset requested from the public forgot login page.",
+	      });
+	    }
+	    json(res, 200, {
+	      ok: true,
+	      message:
+	        emailProvider() === "local-outbox"
+	          ? "If that email is on Hoppers, your password request is now in the Hoppers admin recovery desk."
+	          : "If that email is on Hoppers, we sent the login email and password reset link.",
+	    });
+	    return true;
+	  }
+
+	  if (pathname === "/api/account/recovery-request" && req.method === "POST") {
+	    if (!rateLimit(req, "account-recovery-request", 8, 15 * 60 * 1000)) {
+	      json(res, 429, { error: "Too many recovery requests. Try again later." });
+	      return true;
+	    }
+	    const body = await readBody(req);
+	    const requestType = body.requestType === "password" ? "password" : "username";
+	    const accountType = body.accountType === "hostel" ? "hostel" : body.accountType === "worker" ? "worker" : "";
+	    const email = normalizeEmail(body.email);
+	    const profileName = cleanRecoveryText(body.profileName || body.name, 120);
+	    const contact = cleanRecoveryText(body.contact || body.phone, 120);
+	    const details = cleanRecoveryText(body.details, 900);
+
+	    if (!email && !profileName && !contact) {
+	      json(res, 400, { error: "Add an email, profile name, or contact number so Hoppers can find the account." });
+	      return true;
+	    }
+
+	    await logRecoveryRequest(req, {
+	      requestType,
+	      email,
+	      accountType,
+	      profileName,
+	      contact,
+	      details,
+	    });
+
+	    json(res, 200, {
+	      ok: true,
+	      message: "Hoppers received your account recovery request. Admin can now look up the account and help with the username or password reset.",
+	    });
+	    return true;
+	  }
 
   if (pathname === "/api/account/reset-password" && req.method === "POST") {
     if (!rateLimit(req, "account-reset-password", 10, 15 * 60 * 1000)) {
@@ -2020,16 +2280,25 @@ async function handleApi(req, res, pathname) {
     return true;
   }
 
-  if (pathname === "/api/admin/stats" && req.method === "GET") {
-    if (!isAdmin(req)) {
-      json(res, 401, { error: "Admin login required" });
-      return true;
-    }
-    json(res, 200, { stats: await adminStats() });
-    return true;
-  }
+	  if (pathname === "/api/admin/stats" && req.method === "GET") {
+	    if (!isAdmin(req)) {
+	      json(res, 401, { error: "Admin login required" });
+	      return true;
+	    }
+	    json(res, 200, { stats: await adminStats() });
+	    return true;
+	  }
 
-  if (pathname === "/api/admin/accounts/recover-paid" && req.method === "POST") {
+	  if (pathname === "/api/admin/recovery-requests" && req.method === "GET") {
+	    if (!isAdmin(req)) {
+	      json(res, 401, { error: "Admin login required" });
+	      return true;
+	    }
+	    json(res, 200, { requests: await adminRecoveryRequests() });
+	    return true;
+	  }
+
+	  if (pathname === "/api/admin/accounts/recover-paid" && req.method === "POST") {
     if (!isAdmin(req)) {
       json(res, 401, { error: "Admin login required" });
       return true;
@@ -2151,14 +2420,15 @@ async function handleApi(req, res, pathname) {
         resetId: result.reset?.id || null,
       },
     });
+    const emailSent = result.email?.status === "sent";
     json(res, 200, {
       ok: true,
       email: account.email,
       emailStatus: result.email?.status || "queued",
-      resetUrl: process.env.RESEND_API_KEY ? null : result.resetUrl,
-      message: process.env.RESEND_API_KEY
+      resetUrl: emailSent ? null : result.resetUrl,
+      message: emailSent
         ? "Password reset email sent."
-        : "Email service is not connected; the reset link is saved in the local outbox and shown here for testing.",
+        : "Email service is not connected or failed; the reset link is saved in the outbox and shown here for testing.",
     });
     return true;
   }
@@ -2380,7 +2650,7 @@ if (require.main === module) {
       console.log(`Hoppers running at http://127.0.0.1:${PORT}`);
       console.log(`Storage: ${useSupabase() ? "Supabase" : "local JSON"}`);
       console.log(`Payments: ${process.env.STRIPE_SECRET_KEY ? "Stripe" : "local demo"}`);
-      console.log(`Email: ${process.env.RESEND_API_KEY ? "Resend" : "local outbox"}`);
+      console.log(`Email: ${emailProvider()}`);
     });
   });
 } else {

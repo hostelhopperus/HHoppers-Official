@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Hoppers Admin</title>
-    <link rel="stylesheet" href="./styles.css?v=31" />
+    <link rel="stylesheet" href="./styles.css?v=32" />
   </head>
   <body class="admin-page">
     <header class="site-header">
@@ -82,7 +82,26 @@
             <span id="stat-deleted">0</span>
             <p>Deleted accounts</p>
           </article>
+          <article>
+            <span id="stat-recovery">0</span>
+            <p>Login recovery</p>
+          </article>
         </div>
+
+        <section class="admin-recovery-queue" aria-labelledby="account-recovery-title">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Login recovery</p>
+              <h2 id="account-recovery-title">Forgot username and password requests</h2>
+              <p>
+                Requests from the public forgot-login page. If Hoppers can match the account, admin can create a reset
+                link here without seeing the member's password.
+              </p>
+            </div>
+            <button id="refresh-recovery" class="button button-light" type="button">Refresh</button>
+          </div>
+          <div id="recovery-request-list" class="recovery-request-list" aria-live="polite"></div>
+        </section>
 
         <section class="admin-recovery-panel" aria-labelledby="recover-paid-title">
           <div>
@@ -151,6 +170,6 @@
     </main>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="./admin.js?v=19"></script>
+    <script src="./admin.js?v=20"></script>
   </body>
 </html>

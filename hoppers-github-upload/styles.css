@@ -468,6 +468,36 @@ h1 {
   grid-template-columns: repeat(2, 1fr);
 }
 
+.split-process,
+.listing-grid {
+  display: grid;
+  gap: 20px;
+  margin: 0 auto;
+  max-width: 1180px;
+}
+
+.split-process {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.listing-grid {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.simple-steps {
+  color: var(--muted);
+  display: grid;
+  gap: 14px;
+  line-height: 1.55;
+  margin: 20px 0 0;
+  padding-left: 22px;
+}
+
+.simple-steps li::marker {
+  color: var(--brick);
+  font-weight: 900;
+}
+
 .panel,
 .feature,
 .profile-card,
@@ -496,6 +526,130 @@ h1 {
 .price-card,
 .signup-form {
   padding: 28px;
+}
+
+.job-card,
+.safety-box,
+.contact-form {
+  background: #fff7df;
+  border: 3px solid var(--ink);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+  padding: 26px;
+}
+
+.job-card {
+  display: grid;
+  gap: 16px;
+}
+
+.job-card:nth-child(2n) {
+  background: #f8e0b7;
+}
+
+.job-card:nth-child(3n) {
+  background: #e7e0bb;
+}
+
+.job-card h3 {
+  font-size: clamp(24px, 3vw, 34px);
+  font-weight: 900;
+  line-height: 1.05;
+}
+
+.job-facts {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.job-facts div {
+  border-top: 1px solid rgba(47, 38, 28, 0.22);
+  display: grid;
+  gap: 10px;
+  grid-template-columns: 96px 1fr;
+  padding: 10px 0;
+}
+
+.job-facts dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.job-facts dd {
+  margin: 0;
+}
+
+.safety-box {
+  background:
+    repeating-linear-gradient(-6deg, rgba(47, 38, 28, 0.04) 0 8px, transparent 8px 18px),
+    #fff2d0;
+  margin: 42px auto;
+  max-width: 1180px;
+}
+
+.safety-box h3,
+.safety-box h2 {
+  font-size: clamp(24px, 4vw, 38px);
+  font-weight: 900;
+  margin-top: 10px;
+}
+
+.safety-box p:not(.eyebrow) {
+  color: var(--muted);
+  line-height: 1.65;
+  margin-top: 14px;
+}
+
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 auto;
+  max-width: 980px;
+}
+
+.tag-cloud .badge {
+  font-size: 16px;
+  padding: 10px 14px;
+}
+
+.pilot-band {
+  align-items: center;
+  background:
+    linear-gradient(90deg, rgba(216, 164, 61, 0.2), rgba(60, 95, 61, 0.14)),
+    var(--chalk-clay);
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+}
+
+.pilot-band > div:first-child {
+  max-width: 760px;
+}
+
+.contact-section {
+  padding-top: 64px;
+}
+
+.contact-form {
+  display: grid;
+  gap: 18px;
+  margin: 0 auto;
+  max-width: 760px;
+}
+
+.contact-form label {
+  display: grid;
+  gap: 8px;
+}
+
+.contact-form label span {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
 }
 
 .step,
@@ -588,6 +742,11 @@ h1 {
   max-width: 560px;
   padding: clamp(24px, 4vw, 36px);
   width: 100%;
+}
+
+.auth-divider {
+  border-top: 2px dashed rgba(47, 38, 28, 0.28);
+  margin: 24px 0;
 }
 
 .auth-helper,
@@ -2341,7 +2500,7 @@ textarea:focus {
 .admin-stats {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   margin: 0 auto 18px;
   max-width: 1180px;
 }
@@ -2363,6 +2522,62 @@ textarea:focus {
   color: var(--muted);
   font-weight: 800;
   margin-top: 4px;
+}
+
+.admin-recovery-queue {
+  background: #f8f6ed;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 34px rgba(23, 32, 34, 0.06);
+  margin: 0 auto 18px;
+  max-width: 1180px;
+  padding: 22px;
+}
+
+.admin-recovery-queue h2 {
+  font-size: 28px;
+  font-weight: 900;
+  margin: 8px 0 0;
+}
+
+.admin-recovery-queue p:not(.eyebrow) {
+  color: var(--muted);
+  line-height: 1.55;
+  margin-top: 10px;
+}
+
+.recovery-request-list {
+  display: grid;
+  gap: 12px;
+}
+
+.recovery-request-card {
+  align-items: start;
+  background: white;
+  border: 1px solid #cfd8d0;
+  border-radius: 8px;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.45fr);
+  padding: 16px;
+}
+
+.recovery-request-card h3 {
+  font-size: 20px;
+  font-weight: 900;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.recovery-request-card .sheet-more {
+  justify-self: stretch;
+}
+
+.recovery-unmatched {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.4;
 }
 
 .admin-recovery-panel {
@@ -2756,6 +2971,8 @@ textarea:focus {
   .feature-grid,
   .card-grid,
   .pricing-grid,
+  .split-process,
+  .listing-grid,
   .forms-grid,
   .review-band,
   .review-panels,
@@ -2785,6 +3002,7 @@ textarea:focus {
   .admin-hero,
   .admin-recovery-panel,
   .admin-recovery-form,
+  .recovery-request-card,
   .account-hero,
   .admin-stats,
   .membership-list,
@@ -2801,7 +3019,8 @@ textarea:focus {
 
   .profile-tools,
   .site-footer,
-  .admin-callout {
+  .admin-callout,
+  .pilot-band {
     align-items: stretch;
     flex-direction: column;
   }
@@ -2837,6 +3056,7 @@ textarea:focus {
   }
 
   .hero-actions,
+  .job-facts div,
   .field-grid {
     grid-template-columns: 1fr;
   }

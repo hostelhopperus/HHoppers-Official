@@ -9,7 +9,7 @@
     <title>Hoppers</title>
     <link rel="manifest" href="./manifest.json" />
     <link rel="apple-touch-icon" href="./assets/icon.svg" />
-    <link rel="stylesheet" href="./styles.css?v=28" />
+    <link rel="stylesheet" href="./styles.css?v=33" />
   </head>
   <body>
     <header class="site-header">
@@ -41,12 +41,15 @@
         <img class="hero-image" src="./assets/hostel-hero.png?v=2" alt="A warm hostel lodge surrounded by trees and mountains" />
         <div class="hero-overlay"></div>
         <div class="hero-content">
-          <p class="pill">Flexible hostel work placements</p>
-          <h1 id="hero-title">Find hostel roles that fit the way you travel.</h1>
+          <p class="pill">Seasonal, short-term, and live-in hostel roles</p>
+          <h1 id="hero-title">Find hostel work around the world.</h1>
           <p class="hero-copy">
-            Hoppers helps traveling workers and hostels connect around clear dates, real roles, and stays that can
-            be quick, seasonal, or something longer.
+            Hoppers connects traveling workers with hostels hiring for seasonal, short-term, and live-in roles.
           </p>
+          <div class="hero-actions">
+            <a class="button button-dark" href="./find-hostels.html">I'm looking for hostel work</a>
+            <a class="button button-light" href="./post-listing.html">I run a hostel / need staff</a>
+          </div>
         </div>
       </section>
 
@@ -67,33 +70,75 @@
 
       <section class="section section-white">
         <div class="section-header">
-          <p class="eyebrow">Openings</p>
-          <h2>Check out these openings.</h2>
-          <p>Approved hostel openings appear here with roles, timing, location, and placement details.</p>
+          <p class="eyebrow">How Hoppers works</p>
+          <h2>One place for workers and hostels to compare the real details.</h2>
+          <p>Hoppers keeps the steps simple so both sides know what is being offered before the first message.</p>
         </div>
-        <div id="opening-grid" class="card-grid" aria-live="polite"></div>
+        <div class="split-process">
+          <article class="panel">
+            <p class="eyebrow">For travelers</p>
+            <h3>Find the right hostel stay.</h3>
+            <ol class="simple-steps">
+              <li>Create your free worker profile</li>
+              <li>Browse hostel roles by location, date, and perks</li>
+              <li>Apply and connect with hostels</li>
+            </ol>
+          </article>
+          <article class="panel">
+            <p class="eyebrow">For hostels</p>
+            <h3>Fill the open spots faster.</h3>
+            <ol class="simple-steps">
+              <li>Create a hostel profile</li>
+              <li>Post seasonal or short-term roles</li>
+              <li>Review workers and fill open spots</li>
+            </ol>
+          </article>
+        </div>
       </section>
 
       <section class="review-band">
         <div>
-          <p class="eyebrow">Review-first</p>
-          <h2>More than a signup form. Less chaos than an inbox.</h2>
+          <p class="eyebrow">Why Hoppers?</p>
+          <h2>Built for hostel work, not random job posts.</h2>
           <p>
-            Hoppers is intentionally structured around reviewed profiles, practical placement details, and mutual
-            accountability so both sides can make calmer decisions.
+            Hoppers is built specifically for hostels, seasonal workers, and short-term placements. Profiles include
+            dates, skills, languages, experience, and role expectations before anyone starts messaging.
           </p>
         </div>
         <div class="review-panels">
           <article>
-            <span aria-hidden="true">☑</span>
-            <h3>Workers are not anonymous</h3>
-            <p>Profiles include skills, dates, languages, review signals, and past placement context.</p>
+            <span aria-hidden="true">✓</span>
+            <h3>Useful profile details</h3>
+            <p>Availability, languages, skills, past hostel experience, and preferred countries sit in one place.</p>
           </article>
           <article>
             <span aria-hidden="true">⌂</span>
-            <h3>Hostels are accountable too</h3>
-            <p>Workers can review role accuracy, housing, treatment, schedule clarity, and whether they would return.</p>
+            <h3>Hostel-specific roles</h3>
+            <p>Reception, bar, events, housekeeping, breakfast, tours, maintenance, and live-in support are easy to compare.</p>
           </article>
+        </div>
+      </section>
+
+      <section class="section section-white">
+        <div class="section-header">
+          <p class="eyebrow">Openings</p>
+          <h2>Check out these openings.</h2>
+          <p>Browse pilot listings and approved hostel openings with role, timing, housing, meals, and pay or exchange details.</p>
+        </div>
+        <div id="opening-grid" class="card-grid" aria-live="polite"></div>
+      </section>
+
+      <section class="section pilot-band">
+        <div>
+          <p class="eyebrow">Early pilot</p>
+          <h2>Early pilot opening soon.</h2>
+          <p>
+            We're looking for hostels and traveling workers to help build the first version of Hoppers.
+          </p>
+        </div>
+        <div class="hero-actions">
+          <a class="button button-dark" href="./sign-in.html">Join as a worker</a>
+          <a class="button button-light" href="./post-listing.html">List your hostel</a>
         </div>
       </section>
     </main>
@@ -106,11 +151,9 @@
         <a href="./contact.html">Contact</a> ·
         <a href="./privacy.html">Privacy</a> ·
         <a href="./terms.html">Terms</a>
-       ·
-        <a href="./admin.html">Admin</a>
       </p>
     </footer>
-    <script src="./script.js?v=15"></script>
+    <script src="./script.js?v=16"></script>
     <script src="./site.js?v=1"></script>
     <script src="./app.js?v=1"></script>
   </body>

@@ -12,12 +12,15 @@ const logoutButton = document.querySelector("#logout-admin");
 const clearRejectedButton = document.querySelector("#clear-rejected");
 const recoverPaidForm = document.querySelector("#recover-paid-form");
 const recoverPaidResult = document.querySelector("#recover-paid-result");
+const recoveryRequestList = document.querySelector("#recovery-request-list");
+const refreshRecoveryButton = document.querySelector("#refresh-recovery");
 
 let activeFilter = "all";
 let activeView = "accounts";
 let cachedAccounts = [];
 let cachedSubmissions = [];
-let cachedAdminStats = { deletedAccounts: 0, deletedWorkers: 0, deletedHostels: 0 };
+let cachedRecoveryRequests = [];
+let cachedAdminStats = { deletedAccounts: 0, deletedWorkers: 0, deletedHostels: 0, recoveryRequests: 0 };
 let statsRefreshTimer = null;
 
 const paidStatuses = new Set(["paid", "complete", "completed", "succeeded", "active"]);
@@ -277,13 +280,15 @@ function submissionRows(submission) {
 }
 
 async function loadData() {
-  const [{ accounts }, { submissions }, { stats }] = await Promise.all([
+  const [{ accounts }, { submissions }, { stats }, { requests }] = await Promise.all([
     fetchJson("/api/admin/accounts"),
     fetchJson("/api/submissions"),
     fetchJson("/api/admin/stats"),
+    fetchJson("/api/admin/recovery-requests"),
   ]);
   cachedAccounts = accounts;
   cachedSubmissions = submissions;
+  cachedRecoveryRequests = requests || [];
   cachedAdminStats = stats || cachedAdminStats;
 }
 
@@ -304,6 +309,68 @@ function updateStats() {
   document.querySelector("#stat-approved").textContent = items.filter((item) => reviewStatus(item.status) === "approved").length;
   document.querySelector("#stat-rejected").textContent = items.filter((item) => reviewStatus(item.status) === "rejected").length;
   document.querySelector("#stat-deleted").textContent = cachedAdminStats.deletedAccounts || 0;
+  document.querySelector("#stat-recovery").textContent = cachedAdminStats.recoveryRequests || cachedRecoveryRequests.length || 0;
+}
+
+function recoveryTypeLabel(value) {
+  return value === "password" ? "Forgot password" : "Forgot username";
+}
+
+function recoveryAccountLabel(request) {
+  const account = request.account;
+  const metadata = request.metadata || {};
+  if (account) {
+    const profile = account.profile || {};
+    return `${profile.name || account.email} (${statusLabel(account.type)})`;
+  }
+  return metadata.profileName || metadata.submittedEmail || request.targetEmail || "No exact match yet";
+}
+
+function recoveryDetailRows(request) {
+  const metadata = request.metadata || {};
+  const account = request.account;
+  return detailRows([
+    ["Submitted", formatDate(request.createdAt)],
+    ["Request type", recoveryTypeLabel(metadata.requestType)],
+    ["Matched account", account ? recoveryAccountLabel(request) : "Needs admin lookup"],
+    ["Account email", account?.email || request.targetEmail || metadata.submittedEmail],
+    ["Submitted account type", statusLabel(metadata.accountType || "Not sure")],
+    ["Submitted profile name", metadata.profileName],
+    ["Submitted contact", metadata.contact],
+    ["Details", metadata.details],
+  ]);
+}
+
+function renderRecoveryRequests() {
+  if (!recoveryRequestList) return;
+  recoveryRequestList.innerHTML = cachedRecoveryRequests.length
+    ? cachedRecoveryRequests
+        .map((request) => {
+          const metadata = request.metadata || {};
+          const account = request.account;
+          return `
+            <article class="recovery-request-card">
+              <div>
+                <p class="eyebrow">${escapeHtml(recoveryTypeLabel(metadata.requestType))}</p>
+                <h3>${escapeHtml(recoveryAccountLabel(request))}</h3>
+                <p>${escapeHtml(account ? "Account matched. Admin can create a reset link." : "No exact account match yet. Use the submitted details to look it up.")}</p>
+              </div>
+              <details class="sheet-more">
+                <summary>Request details</summary>
+                <dl class="sheet-details">${recoveryDetailRows(request)}</dl>
+                <div class="sheet-actions">
+                  ${
+                    account
+                      ? `<button type="button" data-recovery-reset data-id="${escapeHtml(account.id)}">Create reset link</button>`
+                      : `<span class="recovery-unmatched">Search workers and hostel accounts above to match this request.</span>`
+                  }
+                </div>
+              </details>
+            </article>
+          `;
+        })
+        .join("")
+    : `<p class="empty-state">No forgot-login requests yet.</p>`;
 }
 
 function renderAccounts() {
@@ -419,6 +486,7 @@ function renderHostelAccounts() {
 
 function renderDashboard() {
   updateStats();
+  renderRecoveryRequests();
   accountReviewList.hidden = activeView !== "accounts";
   submissionList.hidden = activeView !== "submissions";
   clearRejectedButton.hidden = activeView !== "submissions";
@@ -540,6 +608,18 @@ async function sendAccountReset(button) {
 
 recoverPaidForm?.elements.type.addEventListener("change", syncRecoveryPlanOptions);
 
+refreshRecoveryButton?.addEventListener("click", async () => {
+  refreshRecoveryButton.disabled = true;
+  try {
+    await refreshDashboard();
+    showToast("Recovery requests refreshed.");
+  } catch (error) {
+    showToast(error.message || "Could not refresh recovery requests.");
+  } finally {
+    refreshRecoveryButton.disabled = false;
+  }
+});
+
 recoverPaidForm?.addEventListener("submit", async (event) => {
   event.preventDefault();
   const formData = new FormData(recoverPaidForm);
@@ -608,6 +688,12 @@ submissionList.addEventListener("click", async (event) => {
   } finally {
     button.disabled = false;
   }
+});
+
+recoveryRequestList?.addEventListener("click", async (event) => {
+  const resetButton = event.target.closest("[data-recovery-reset]");
+  if (!resetButton) return;
+  await sendAccountReset(resetButton);
 });
 
 seedDemoButton.addEventListener("click", async () => {
