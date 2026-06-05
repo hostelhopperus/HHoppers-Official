@@ -281,7 +281,7 @@ function normalizeOpening(profile = {}) {
     ...profile,
     name: profile.name || role,
     role,
-    hostelName: profile.hostelName || profile.hostel || (profile.sample ? "Sample pilot hostel" : profile.name || "Hostel"),
+    hostelName: profile.hostelName || profile.hostel || (profile.sample ? "Sample pilot partner" : profile.name || "Work provider"),
     location,
     city: profile.city || (parts.length > 1 ? parts.slice(0, -1).join(", ") : parts[0] || ""),
     country: profile.country || (parts.length > 1 ? parts.at(-1) : ""),
@@ -480,7 +480,7 @@ function filterOpenings(openings, form) {
 
 async function renderOpenings() {
   if (!openingGrid) return;
-  openingGrid.innerHTML = `<p class="empty-state">Loading hostel openings...</p>`;
+  openingGrid.innerHTML = `<p class="empty-state">Loading openings...</p>`;
   try {
     const { hostels } = await fetchJson("/api/published/hostels");
     const approvedHostels = hostels.map(submissionToHostel);
@@ -493,7 +493,7 @@ async function renderOpenings() {
 
 async function renderPublicOpenings() {
   if (!publicOpeningGrid || !publicOpeningFilters) return;
-  publicOpeningGrid.innerHTML = `<p class="empty-state">Loading hostel openings...</p>`;
+  publicOpeningGrid.innerHTML = `<p class="empty-state">Loading openings...</p>`;
   try {
     const { hostels } = await fetchJson("/api/published/hostels");
     const approvedHostels = hostels.map(submissionToHostel);
