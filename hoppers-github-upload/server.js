@@ -19,6 +19,7 @@ const ADMIN_CODE = process.env.ADMIN_CODE || "finntazer_69";
 const SESSION_COOKIE = "hh_admin";
 const ACCOUNT_COOKIE = "hh_account";
 const PASSWORD_RESET_TTL_MS = 60 * 60 * 1000;
+const ACCOUNT_SESSION_MAX_AGE_SECONDS = 60 * 60 * 24 * 90;
 const sessions = new Set();
 const accountSessions = new Map();
 const rateBuckets = new Map();
@@ -157,6 +158,19 @@ function signValue(value) {
 function createSignedToken(payload) {
   const body = Buffer.from(JSON.stringify({ ...payload, issuedAt: Date.now() })).toString("base64url");
   return `${body}.${signValue(body)}`;
+}
+
+function secureCookieSuffix(req) {
+  const proto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  return proto === "https" ? "; Secure" : "";
+}
+
+function accountCookie(req, token) {
+  return `${ACCOUNT_COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${ACCOUNT_SESSION_MAX_AGE_SECONDS}${secureCookieSuffix(req)}`;
+}
+
+function clearAccountCookie(req) {
+  return `${ACCOUNT_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${secureCookieSuffix(req)}`;
 }
 
 function readSignedToken(token) {
@@ -1486,9 +1500,10 @@ async function findAccountForCheckoutSession(session, incomingReference = "") {
   return null;
 }
 
-async function findPaidCheckoutSessionForRecovery(email, plan) {
+async function findPaidCheckoutSessionForRecovery(email, plan, clientReferenceId = "") {
   const targetEmail = normalizeEmail(email);
   if (!targetEmail) return null;
+  const targetReference = safeClientReference(clientReferenceId);
   const createdAfter = Math.floor((Date.now() - 180 * 24 * 60 * 60 * 1000) / 1000);
   let startingAfter = "";
   for (let page = 0; page < 5; page += 1) {
@@ -1500,17 +1515,39 @@ async function findPaidCheckoutSessionForRecovery(email, plan) {
     if (startingAfter) query.starting_after = startingAfter;
     const result = await stripeRequest("checkout/sessions", query, { method: "GET" });
     const sessions = Array.isArray(result?.data) ? result.data : [];
-    const match = sessions.find(
+    const matches = sessions.filter(
       (session) =>
         checkoutSessionPaid(session) &&
         checkoutSessionEmail(session) === targetEmail &&
         checkoutSessionMatchesPlan(session, plan)
     );
-    if (match) return match;
+    const referenceMatch = targetReference
+      ? matches.find((session) => safeClientReference(session.client_reference_id) === targetReference)
+      : null;
+    if (referenceMatch) return referenceMatch;
+    if (!targetReference && matches[0]) return matches[0];
     if (!result?.has_more || !sessions.length) break;
     startingAfter = sessions.at(-1).id;
   }
   return null;
+}
+
+async function activatePaidSignupAccount(req, account, session, clientReferenceId = "") {
+  if (!account || !session) throw new Error("Missing account or Stripe session.");
+  const billing = await recoveredStripeBilling(account.type, account.email, accountPlan(account), session);
+  const updated = await replaceAccount(account.id, (current) => ({
+    ...current,
+    status: "profile_draft",
+    updatedAt: new Date().toISOString(),
+    billing: {
+      ...billing,
+      clientReferenceId: safeClientReference(clientReferenceId || current.billing?.clientReferenceId || session.client_reference_id),
+    },
+  }));
+  await maybeSendWelcomeEmail(updated);
+  const token = createSignedToken({ purpose: "account", accountId: updated.id });
+  accountSessions.set(token, updated.id);
+  return { updated, token };
 }
 
 async function recoveredStripeBilling(type, email, plan, session) {
@@ -1563,7 +1600,8 @@ async function verifiedStripeBilling(type, email, plan, incoming = {}) {
     throw new Error("Stripe payment email did not match the account email.");
   }
   const expectedPaymentLink = STRIPE_PAYMENT_LINK_IDS[normalized];
-  if (expectedPaymentLink && session.payment_link && session.payment_link !== expectedPaymentLink) {
+  const paymentLinkId = stripeObjectId(session.payment_link);
+  if (expectedPaymentLink && paymentLinkId && paymentLinkId !== expectedPaymentLink) {
     throw new Error("Stripe payment did not match the selected Hoppers plan.");
   }
 
@@ -2152,7 +2190,7 @@ async function handleApi(req, res, pathname) {
       200,
       await accountPayload(updated),
       {
-        "set-cookie": `${ACCOUNT_COOKIE}=${encodeURIComponent(sessionToken)}; HttpOnly; SameSite=Lax; Path=/`,
+        "set-cookie": accountCookie(req, sessionToken),
       }
     );
     return true;
@@ -2195,7 +2233,16 @@ async function handleApi(req, res, pathname) {
     }
 
     const now = new Date().toISOString();
-    const clientReferenceId = safeClientReference(body.clientReferenceId || body.signupId || existing?.billing?.clientReferenceId || `hoppers_${crypto.randomUUID()}`);
+    const incomingReferenceId = safeClientReference(body.clientReferenceId || body.signupId || "");
+    const existingReferenceId = safeClientReference(existing?.billing?.clientReferenceId || "");
+    if (existing && isPaymentPendingAccount(existing) && existingReferenceId && existingReferenceId !== incomingReferenceId) {
+      json(res, 409, {
+        error:
+          "A payment is already pending for that email. Finish the original payment flow, use forgot password, or contact Hoppers support so the paid account can be recovered safely.",
+      });
+      return true;
+    }
+    const clientReferenceId = incomingReferenceId || existingReferenceId || `hoppers_${crypto.randomUUID()}`;
     const billing = buildAccountBilling(type, plan, {
       ...(existing?.billing || {}),
       provider: "stripe",
@@ -2263,35 +2310,98 @@ async function handleApi(req, res, pathname) {
       return true;
     }
 
-    let billing;
     try {
-      billing = await verifiedStripeBilling(account.type, account.email, accountPlan(account), {
-        ...(account.billing || {}),
-        stripeCheckoutSessionId: session.id,
-        clientReferenceId: safeClientReference(account.billing?.clientReferenceId || body.clientReferenceId || session.client_reference_id),
-      });
+      const { updated, token } = await activatePaidSignupAccount(
+        req,
+        account,
+        session,
+        account.billing?.clientReferenceId || body.clientReferenceId || session.client_reference_id
+      );
+      json(
+        res,
+        200,
+        await accountPayload(updated),
+        {
+          "set-cookie": accountCookie(req, token),
+        }
+      );
     } catch (error) {
       json(res, 402, { error: error.message || "Stripe payment could not be verified." });
+    }
+    return true;
+  }
+
+  if (pathname === "/api/account/recover-paid-signup" && req.method === "POST") {
+    if (!permanentAccountStorageReady()) {
+      json(res, 503, { error: "Permanent account storage is not connected yet. Add Supabase before accepting new paid accounts." });
+      return true;
+    }
+    if (!rateLimit(req, "account-recover-paid-signup", 12, 60 * 60 * 1000)) {
+      json(res, 429, { error: "Too many payment recovery checks. Try again later." });
+      return true;
+    }
+    const body = await readBody(req);
+    const clientReferenceId = safeClientReference(body.clientReferenceId || body.signupId || "");
+    const sessionId = String(body.stripeCheckoutSessionId || body.checkoutSessionId || body.sessionId || "").trim();
+    const email = normalizeEmail(body.email);
+    if (!clientReferenceId && !sessionId) {
+      json(res, 400, { error: "Open payment from the Hoppers signup flow so we can safely match the Stripe payment to the saved account." });
       return true;
     }
 
-    const updated = await replaceAccount(account.id, (current) => ({
-      ...current,
-      status: "profile_draft",
-      updatedAt: new Date().toISOString(),
-      billing,
-    }));
-    await maybeSendWelcomeEmail(updated);
-    const token = createSignedToken({ purpose: "account", accountId: updated.id });
-    accountSessions.set(token, updated.id);
-    json(
-      res,
-      200,
-      await accountPayload(updated),
-      {
-        "set-cookie": `${ACCOUNT_COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/`,
+    const pendingAccounts = (await listAccounts()).filter((account) => !isDeletedAccount(account) && isPaymentPendingAccount(account));
+    const account =
+      (clientReferenceId
+        ? pendingAccounts.find((item) => safeClientReference(item.billing?.clientReferenceId) === clientReferenceId)
+        : null) ||
+      (sessionId && email ? pendingAccounts.find((item) => item.email === email) : null);
+
+    if (!account) {
+      json(res, 404, { error: "Hoppers could not find the pending signup for this payment. Contact Hoppers with the Stripe receipt email." });
+      return true;
+    }
+    if (email && account.email !== email) {
+      json(res, 409, { error: "The pending signup email did not match this payment recovery request." });
+      return true;
+    }
+
+    let session;
+    try {
+      session = sessionId
+        ? await retrieveStripeCheckoutSession(sessionId)
+        : await findPaidCheckoutSessionForRecovery(account.email, accountPlan(account), clientReferenceId);
+      if (!session) {
+        json(res, 404, { error: "Stripe has not returned a paid checkout for this signup yet. If your card was charged, wait a moment and try again." });
+        return true;
       }
-    );
+      const sessionReference = safeClientReference(session.client_reference_id);
+      if (clientReferenceId && sessionReference && sessionReference !== clientReferenceId) {
+        json(res, 409, { error: "The Stripe payment did not match the saved Hoppers signup reference." });
+        return true;
+      }
+      const { updated, token } = await activatePaidSignupAccount(req, account, session, clientReferenceId);
+      await logAdminAction({
+        action: "paid_signup_recovered",
+        accountId: updated.id,
+        targetEmail: updated.email,
+        metadata: {
+          accountType: updated.type,
+          plan: accountPlan(updated),
+          stripeCheckoutSessionId: session.id,
+          clientReferenceId,
+        },
+      });
+      json(
+        res,
+        200,
+        await accountPayload(updated),
+        {
+          "set-cookie": accountCookie(req, token),
+        }
+      );
+    } catch (error) {
+      json(res, 502, { error: error.message || "Could not recover the paid signup." });
+    }
     return true;
   }
 
@@ -2362,7 +2472,7 @@ async function handleApi(req, res, pathname) {
       201,
       await accountPayload(account),
       {
-        "set-cookie": `${ACCOUNT_COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/`,
+        "set-cookie": accountCookie(req, token),
       }
     );
     return true;
@@ -2394,7 +2504,7 @@ async function handleApi(req, res, pathname) {
       200,
       await accountPayload(account),
       {
-        "set-cookie": `${ACCOUNT_COOKIE}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/`,
+        "set-cookie": accountCookie(req, token),
       }
     );
     return true;
@@ -2408,7 +2518,7 @@ async function handleApi(req, res, pathname) {
       200,
       { authenticated: false },
       {
-        "set-cookie": `${ACCOUNT_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`,
+        "set-cookie": clearAccountCookie(req),
       }
     );
     return true;
@@ -2471,9 +2581,10 @@ async function handleApi(req, res, pathname) {
     }
     try {
       const hasStripeBilling = Boolean(account.billing?.stripeCustomerId || account.billing?.stripeSubscriptionId);
+      const hasRecordedSubscription = Boolean(account.billing?.stripeSubscriptionId);
       const matchedSubscription = await findStripeSubscriptionForAccount(account);
       const subscriptionId = matchedSubscription?.id;
-      if (hasStripeBilling && !subscriptionId) {
+      if (hasRecordedSubscription && !subscriptionId) {
         json(res, 409, { error: "Hoppers could not find the active Stripe subscription. Open Manage subscription in Stripe or contact support before deleting the account." });
         return true;
       }
@@ -2503,7 +2614,7 @@ async function handleApi(req, res, pathname) {
             : null,
         },
         {
-          "set-cookie": `${ACCOUNT_COOKIE}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`,
+          "set-cookie": clearAccountCookie(req),
         }
       );
     } catch (error) {

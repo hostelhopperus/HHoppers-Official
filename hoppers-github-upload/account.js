@@ -1083,6 +1083,7 @@ function clearLocalDeletedAccountData(account) {
   const accountId = String(account?.id || "");
   const profileName = String(account?.profile?.name || "").toLowerCase();
   try {
+    sessionStorage.removeItem("hoppersPendingAccount");
     localStorage.removeItem("hoppersPendingAccount");
     if (accountId) localStorage.removeItem(`hoppers_saved_openings_${accountId}`);
     if (email) localStorage.removeItem(`hoppers_saved_openings_${email}`);
@@ -1381,12 +1382,12 @@ function renderMembership(account) {
   }
   if (cancelMembershipButton) {
     cancelMembershipButton.textContent = "Delete account";
-    cancelMembershipButton.disabled = (!hasSubscription && !hasCustomer) || status === "canceling" || status === "canceled";
+    cancelMembershipButton.disabled = status === "canceling" || status === "canceled";
     cancelMembershipButton.title = hasSubscription
       ? ""
       : hasCustomer
         ? "Hoppers will ask Stripe for the active subscription tied to this customer."
-        : "Stripe subscription details are not connected yet.";
+        : "No Stripe subscription is connected. Hoppers will still delete the account profile data.";
   }
 }
 

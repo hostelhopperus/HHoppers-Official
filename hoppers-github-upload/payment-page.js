@@ -24,6 +24,7 @@ function decorateStripeCheckout() {
   if (fallback && reference) {
     const url = new URL(fallback.href);
     url.searchParams.set("client_reference_id", reference);
+    if (email) url.searchParams.set("prefilled_email", email);
     fallback.href = url.toString();
   }
 }

@@ -39,6 +39,7 @@ async function fetchJson(url, options = {}) {
 
 async function finishPaidSignup() {
   const params = new URLSearchParams(window.location.search);
+  const pending = pendingSignup();
   const paymentLooksSuccessful =
     params.get("payment") === "success" ||
     params.get("paid") === "true" ||
@@ -46,29 +47,28 @@ async function finishPaidSignup() {
     params.get("stripe_success") === "true";
   const checkoutSessionId = params.get("session_id") || params.get("checkout_session_id") || params.get("session");
 
-  if (!paymentLooksSuccessful) {
+  if (!paymentLooksSuccessful && !pending) {
     setPaymentStatus(
       "Payment is not confirmed yet.",
-      "Use a Stripe success URL like payment-success.html?payment=success so Hoppers knows Stripe sent the customer back after payment."
-    );
-    return;
-  }
-
-  if (!checkoutSessionId) {
-    setPaymentStatus(
-      "Payment return is missing a Stripe session.",
-      "Do not pay again. The Stripe payment link needs to send Hoppers the checkout session so we can activate the account."
+      "Use the secure payment page from Hoppers signup first. If your card was charged, contact Hoppers with the Stripe receipt email."
     );
     return;
   }
 
   try {
-    const pending = pendingSignup();
-    await fetchJson("/api/account/complete-paid-signup", {
+    setPaymentStatus(
+      checkoutSessionId ? "Confirming Stripe payment..." : "Finding your paid Stripe checkout...",
+      "Do not pay again. Hoppers is matching your payment to the profile you started."
+    );
+    const endpoint = checkoutSessionId ? "/api/account/complete-paid-signup" : "/api/account/recover-paid-signup";
+    await fetchJson(endpoint, {
       method: "POST",
       body: JSON.stringify({
         stripeCheckoutSessionId: checkoutSessionId,
         clientReferenceId: pending?.clientReferenceId || pending?.signupId || "",
+        email: pending?.email || "",
+        plan: pending?.plan || "",
+        type: pending?.type || "",
       }),
     });
     sessionStorage.removeItem("hoppersPendingAccount");
@@ -77,7 +77,10 @@ async function finishPaidSignup() {
       window.location.href = "./account.html";
     }, 900);
   } catch (error) {
-    setPaymentStatus("Payment worked, but account creation needs attention.", error.message || "Try signing in or contact Hoppers support.");
+    setPaymentStatus(
+      "Payment worked, but account activation needs attention.",
+      error.message || "Try again in a minute, then contact Hoppers support with your Stripe receipt email."
+    );
   }
 }
 
