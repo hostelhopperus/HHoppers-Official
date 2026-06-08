@@ -150,17 +150,15 @@ async function fetchJson(url, options = {}) {
   return body;
 }
 
-async function savePendingSignup(signup) {
-  const response = await fetchJson("/api/account/pending-signup", {
-    method: "POST",
-    body: JSON.stringify(signup),
-  });
+function saveSignupDraft(signup) {
+  if (window.location.protocol === "file:") {
+    throw new Error("Open the live Hoppers site or localhost before starting paid signup.");
+  }
   const pending = {
     ...signup,
-    email: response.account?.email || signup.email,
-    accountId: response.accountId || response.account?.id || "",
-    clientReferenceId: response.clientReferenceId || signup.clientReferenceId,
-    paymentPage: response.paymentPage || paymentPages[signup.plan] || "./payment.html",
+    email: String(signup.email || "").trim(),
+    clientReferenceId: signup.clientReferenceId || createClientReferenceId(),
+    paymentPage: paymentPages[signup.plan] || "./payment.html",
   };
   sessionStorage.setItem("hoppersPendingAccount", JSON.stringify(pending));
   return pending;
@@ -196,6 +194,9 @@ function syncPlanOptions() {
   createProfileForm.querySelectorAll(".worker-nationality-field").forEach((field) => {
     field.hidden = selectedType === "hostel";
   });
+  createProfileForm.querySelectorAll(".worker-age-field, .worker-gender-field").forEach((field) => {
+    field.hidden = selectedType === "hostel";
+  });
   createProfileForm.querySelectorAll(".hostel-website-field").forEach((field) => {
     field.hidden = selectedType !== "hostel";
   });
@@ -218,6 +219,15 @@ function createClientReferenceId() {
 function populateNationalitySelects() {
   document.querySelectorAll("[data-nationality-select]").forEach((select) => {
     select.innerHTML = `<option value="">Select nationality</option>${countries.map((country) => `<option value="${country}">${country}</option>`).join("")}`;
+  });
+}
+
+function populateAgeSelects() {
+  const options = Array.from({ length: 82 }, (_, index) => 18 + index)
+    .map((age) => `<option value="${age}">${age}</option>`)
+    .join("");
+  document.querySelectorAll("[data-age-select]").forEach((select) => {
+    select.innerHTML = `<option value="">Select age</option>${options}`;
   });
 }
 
@@ -257,8 +267,10 @@ async function profileFromCreateForm() {
   return {
     name: String(formData.get("name") || "").trim(),
     location: "",
-    website: String(formData.get("website") || "").trim(),
-    nationality: String(formData.get("nationality") || "").trim(),
+    website: selectedType === "hostel" ? String(formData.get("website") || "").trim() : "",
+    nationality: selectedType === "worker" ? String(formData.get("nationality") || "").trim() : "",
+    age: selectedType === "worker" ? String(formData.get("age") || "").trim() : "",
+    gender: selectedType === "worker" ? String(formData.get("gender") || "").trim() : "",
     photo: photoFile ? await fileToDataUrl(photoFile) : "",
     tags: formData.getAll("tags"),
     startDate,
@@ -317,11 +329,16 @@ createProfileForm.addEventListener("submit", async (event) => {
     const profile = await profileFromCreateForm();
     const plan = profile.plan;
     const email = String(formData.get("email") || "").trim();
+    const password = String(formData.get("password") || "");
+    const confirmPassword = String(formData.get("confirmPassword") || "");
+    if (password !== confirmPassword) throw new Error("Passwords must match.");
+    if (selectedType === "worker" && !profile.age) throw new Error("Select your age.");
+    if (selectedType === "worker" && !profile.gender) throw new Error("Select your gender.");
     const clientReferenceId = createClientReferenceId();
-    const pending = await savePendingSignup({
+    const pending = saveSignupDraft({
       type: selectedType,
       email,
-      password: formData.get("password"),
+      password,
       profile,
       plan,
       clientReferenceId,
@@ -347,4 +364,5 @@ createPlanOptions.addEventListener("click", (event) => {
 });
 
 populateNationalitySelects();
+populateAgeSelects();
 syncPanel();

@@ -318,17 +318,15 @@ async function fetchJson(url, options = {}) {
   return body;
 }
 
-async function savePendingSignup(signup) {
-  const response = await fetchJson("/api/account/pending-signup", {
-    method: "POST",
-    body: JSON.stringify(signup),
-  });
+function saveSignupDraft(signup) {
+  if (window.location.protocol === "file:") {
+    throw new Error("Open the live Hoppers site or localhost before starting paid signup.");
+  }
   const pending = {
     ...signup,
-    email: response.account?.email || signup.email,
-    accountId: response.accountId || response.account?.id || "",
-    clientReferenceId: response.clientReferenceId || signup.clientReferenceId,
-    paymentPage: response.paymentPage || paymentPages[signup.plan] || "./sign-in.html",
+    email: String(signup.email || "").trim(),
+    clientReferenceId: signup.clientReferenceId || createClientReferenceId(),
+    paymentPage: paymentPages[signup.plan] || "./sign-in.html",
   };
   sessionStorage.setItem("hoppersPendingAccount", JSON.stringify(pending));
   return pending;
@@ -360,6 +358,8 @@ function formProfile(form) {
     location: String(formData.get("location") || "").trim(),
     website: type === "hostel" ? String(formData.get("website") || "").trim() : "",
     nationality: type === "worker" ? String(formData.get("nationality") || "").trim() : "",
+    age: type === "worker" ? String(formData.get("age") || "").trim() : "",
+    gender: type === "worker" ? String(formData.get("gender") || "").trim() : "",
     photo: String(formData.get("photoData") || currentAccount?.profile?.photo || ""),
     photos: type === "hostel" ? photos.slice(0, 10) : [],
     tags: formData.getAll("tags"),
@@ -393,6 +393,15 @@ function populateNationalitySelects() {
     select.innerHTML = `<option value="">Any country</option>${countries
       .map((country) => `<option value="${escapeHtml(country)}">${escapeHtml(country)}</option>`)
       .join("")}`;
+  });
+}
+
+function populateAgeSelects() {
+  const options = Array.from({ length: 82 }, (_, index) => 18 + index)
+    .map((age) => `<option value="${age}">${age}</option>`)
+    .join("");
+  document.querySelectorAll("[data-age-select]").forEach((select) => {
+    select.innerHTML = `<option value="">Select age</option>${options}`;
   });
 }
 
@@ -459,6 +468,9 @@ function syncPlanOptions(type, select) {
   select.closest("form")?.querySelectorAll(".worker-nationality-field").forEach((field) => {
     field.hidden = type === "hostel";
   });
+  select.closest("form")?.querySelectorAll(".worker-age-field, .worker-gender-field").forEach((field) => {
+    field.hidden = type === "hostel";
+  });
   select.closest("form")?.querySelectorAll(".hostel-website-field").forEach((field) => {
     field.hidden = type !== "hostel";
   });
@@ -476,6 +488,8 @@ function fillProfileForm(account) {
   profileForm.elements.location.value = profile.location || "";
   profileForm.elements.website.value = account.type === "hostel" ? profile.website || "" : "";
   profileForm.elements.nationality.value = account.type === "worker" ? profile.nationality || "" : "";
+  profileForm.elements.age.value = account.type === "worker" ? profile.age || "" : "";
+  profileForm.elements.gender.value = account.type === "worker" ? profile.gender || "" : "";
   profileForm.elements.startDate.value = profile.startDate || "";
   profileForm.elements.endDate.value = profile.endDate || "";
   profileForm.elements.bio.value = profile.bio || "";
@@ -607,6 +621,13 @@ function workerAvatarMarkup(profile) {
     : `<span>${escapeHtml((profile.name || "H").trim().slice(0, 1).toUpperCase())}</span>`;
 }
 
+function genderLabel(value) {
+  if (value === "male") return "Male";
+  if (value === "female") return "Female";
+  if (value === "prefer_not_to_say") return "Prefer not to say";
+  return "";
+}
+
 function previousHostelCards(profile) {
   const hostels = profileList(profile.previousHostels);
   return hostels.length
@@ -641,6 +662,8 @@ function renderWorkerProfile(account) {
           <div class="worker-profile-meta">
             <span>${escapeHtml(profile.location || "Location open")}</span>
             <span>${escapeHtml(profile.nationality || "Nationality not added")}</span>
+            <span>${escapeHtml(profile.age ? `${profile.age} years old` : "Age not added")}</span>
+            <span>${escapeHtml(genderLabel(profile.gender) || "Gender not added")}</span>
             <span>${escapeHtml(account.billing?.planLabel || planLabels[profile.plan] || "Plan pending")}</span>
           </div>
           <div class="verification-badge-row">${badges}</div>
@@ -1488,11 +1511,18 @@ registerForm.addEventListener("submit", async (event) => {
   try {
     profile = await attachPhoto(registerForm, profile);
     validateDates(profile);
-    const plan = profile.plan || (formData.get("type") === "hostel" ? "hostel-basic" : "worker-basic");
-    const pending = await savePendingSignup({
-      type: formData.get("type"),
+    const type = String(formData.get("type") || "worker");
+    const password = String(formData.get("password") || "");
+    const confirmPassword = String(formData.get("confirmPassword") || "");
+    if (password !== confirmPassword) throw new Error("Passwords must match.");
+    if (type === "worker" && !profile.age) throw new Error("Select your age.");
+    if (type === "worker" && !profile.gender) throw new Error("Select your gender.");
+    const plan = profile.plan || (type === "hostel" ? "hostel-basic" : "worker-basic");
+    profile = { ...profile, plan };
+    const pending = saveSignupDraft({
+      type,
       email: String(formData.get("email") || "").trim(),
-      password: formData.get("password"),
+      password,
       profile,
       plan,
       clientReferenceId: createClientReferenceId(),
@@ -1570,6 +1600,7 @@ cancelMembershipButton?.addEventListener("click", async () => {
 });
 
 populateNationalitySelects();
+populateAgeSelects();
 syncPlanOptions(registerForm.elements.type.value, registerForm.elements.plan);
 fetchJson("/api/account/session")
   .then((payload) => {

@@ -93,12 +93,29 @@
                 <input name="password" required minlength="8" type="password" autocomplete="new-password" placeholder="8+ characters" />
               </label>
               <label>
+                <span>Confirm password</span>
+                <input name="confirmPassword" required minlength="8" type="password" autocomplete="new-password" placeholder="Enter it again" />
+              </label>
+              <label>
                 <span>Profile photo</span>
                 <input name="photo" accept="image/*" type="file" />
               </label>
               <label class="worker-nationality-field">
                 <span>Nationality</span>
                 <select name="nationality" data-nationality-select></select>
+              </label>
+              <label class="worker-age-field">
+                <span>Age</span>
+                <select name="age" data-age-select></select>
+              </label>
+              <label class="worker-gender-field">
+                <span>Gender</span>
+                <select name="gender">
+                  <option value="">Select gender</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="prefer_not_to_say">Prefer not to say</option>
+                </select>
               </label>
               <label class="hostel-website-field" hidden>
                 <span>Website</span>
@@ -147,7 +164,7 @@
     </footer>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="./sign-in.js?v=8"></script>
+    <script src="./sign-in.js?v=9"></script>
     <script src="./site.js?v=1"></script>
     <script src="./app.js?v=1"></script>
   </body>

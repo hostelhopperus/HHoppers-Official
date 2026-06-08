@@ -380,11 +380,15 @@ function sanitizeAccountProfile(input, type, existing = {}) {
     : Array.isArray(existing.photos)
       ? existing.photos
       : [];
+  const workerAge = Number.parseInt(profile.age || existing.age || "", 10);
+  const workerGender = String(profile.gender || existing.gender || "").trim();
   return {
     name: String(profile.name || existing.name || "").trim(),
     location: String(profile.location || existing.location || "").trim(),
     website: String(profile.website || existing.website || "").trim(),
     nationality: String(profile.nationality || existing.nationality || "").trim(),
+    age: type === "worker" && workerAge >= 18 && workerAge <= 99 ? String(workerAge) : "",
+    gender: type === "worker" && ["male", "female", "prefer_not_to_say"].includes(workerGender) ? workerGender : "",
     tags: normalizeList(profile.tags || profile.skills || profile.roles || existing.tags),
     startDate: String(profile.startDate || existing.startDate || "").trim(),
     endDate: String(profile.endDate || existing.endDate || "").trim(),
@@ -1586,35 +1590,55 @@ async function recoveredStripeBilling(type, email, plan, session) {
 async function verifiedStripeBilling(type, email, plan, incoming = {}) {
   const normalized = normalizedPlan(plan || incoming.plan, type);
   const sessionId = incoming.stripeCheckoutSessionId || incoming.checkoutSessionId || incoming.sessionId;
-  if (!sessionId) {
-    if (paidSignupRequired()) throw new Error("Stripe success session is missing. Payment links must return session_id.");
+  const clientReferenceId = safeClientReference(incoming.clientReferenceId || incoming.signupId || incoming.client_reference_id || "");
+  let session = null;
+  if (sessionId) {
+    session = await retrieveStripeCheckoutSession(sessionId);
+  } else if (clientReferenceId) {
+    session = await findPaidCheckoutSessionForRecovery(email, normalized, clientReferenceId);
+  }
+  if (!session) {
+    if (paidSignupRequired()) {
+      throw new Error(
+        clientReferenceId
+          ? "Stripe has not returned a paid checkout for this signup yet. If your card was charged, wait a moment and try again."
+          : "Stripe success session is missing. Open payment from the Hoppers signup flow so the checkout can be verified."
+      );
+    }
     return buildAccountBilling(type, normalized, incoming);
   }
-  const session = await retrieveStripeCheckoutSession(sessionId);
-  if (!session) throw new Error("Stripe checkout session was not found.");
-  if (session.payment_status !== "paid" && session.status !== "complete") {
+  if (!checkoutSessionPaid(session)) {
     throw new Error("Stripe has not confirmed this payment yet.");
+  }
+  const sessionReference = safeClientReference(session.client_reference_id);
+  if (clientReferenceId && sessionReference && sessionReference !== clientReferenceId) {
+    throw new Error("The Stripe payment did not match this Hoppers signup.");
   }
   const paidEmail = checkoutSessionEmail(session);
   if (paidEmail && email && paidEmail !== normalizeEmail(email)) {
     throw new Error("Stripe payment email did not match the account email.");
   }
-  const expectedPaymentLink = STRIPE_PAYMENT_LINK_IDS[normalized];
-  const paymentLinkId = stripeObjectId(session.payment_link);
-  if (expectedPaymentLink && paymentLinkId && paymentLinkId !== expectedPaymentLink) {
+  if (!checkoutSessionMatchesPlan(session, normalized)) {
     throw new Error("Stripe payment did not match the selected Hoppers plan.");
   }
 
-  const subscription = session.subscription && typeof session.subscription === "object" ? session.subscription : null;
+  let subscription = session.subscription && typeof session.subscription === "object" ? session.subscription : null;
+  if (!subscription && stripeObjectId(session.subscription)) {
+    subscription = await retrieveStripeSubscription(stripeObjectId(session.subscription));
+  }
+  if (subscription && ["canceled", "incomplete_expired"].includes(subscription.status)) {
+    throw new Error("The matching Stripe subscription is no longer active.");
+  }
   return buildAccountBilling(type, normalized, {
     ...incoming,
     provider: "stripe",
     status: "paid",
-    paidAt: incoming.paidAt || new Date().toISOString(),
+    paidAt: incoming.paidAt || (session.created ? new Date(session.created * 1000).toISOString() : new Date().toISOString()),
     stripeCustomerId: stripeObjectId(session.customer) || incoming.stripeCustomerId || null,
     stripeCheckoutSessionId: session.id,
     stripeSubscriptionId: stripeObjectId(session.subscription) || incoming.stripeSubscriptionId || null,
     stripePaymentLinkId: stripeObjectId(session.payment_link) || incoming.stripePaymentLinkId || null,
+    clientReferenceId: clientReferenceId || sessionReference || incoming.clientReferenceId || null,
     subscriptionStatus: subscription?.status || incoming.subscriptionStatus || null,
     cancelAtPeriodEnd: Boolean(subscription?.cancel_at_period_end || incoming.cancelAtPeriodEnd),
     currentPeriodEnd: stripePeriodEnd(subscription) || incoming.currentPeriodEnd || null,
@@ -2197,80 +2221,8 @@ async function handleApi(req, res, pathname) {
   }
 
   if (pathname === "/api/account/pending-signup" && req.method === "POST") {
-    if (!permanentAccountStorageReady()) {
-      json(res, 503, { error: "Permanent account storage is not connected yet. Add Supabase before accepting new paid accounts." });
-      return true;
-    }
-    if (!rateLimit(req, "account-pending-signup", 12, 60 * 60 * 1000)) {
-      json(res, 429, { error: "Too many account attempts. Try again later." });
-      return true;
-    }
-    const body = await readBody(req);
-    const type = body.type === "hostel" ? "hostel" : "worker";
-    const email = normalizeEmail(body.email);
-    const password = String(body.password || "");
-    const profile = sanitizeAccountProfile(body.profile || body, type);
-    const plan = normalizedPlan(profile.plan || body.plan || body.billing?.plan || defaultAccountPlan(type), type);
-    profile.plan = plan;
-
-    if (!email || !email.includes("@")) {
-      json(res, 400, { error: "Enter a valid email address." });
-      return true;
-    }
-    if (password.length < 8) {
-      json(res, 400, { error: "Password must be at least 8 characters." });
-      return true;
-    }
-    if (!profile.name) {
-      json(res, 400, { error: "Enter a profile name." });
-      return true;
-    }
-
-    const existing = await findAccountByEmail(email);
-    if (existing && !isPaymentPendingAccount(existing)) {
-      json(res, 409, { error: "An account already exists for that email. Sign in instead." });
-      return true;
-    }
-
-    const now = new Date().toISOString();
-    const incomingReferenceId = safeClientReference(body.clientReferenceId || body.signupId || "");
-    const existingReferenceId = safeClientReference(existing?.billing?.clientReferenceId || "");
-    if (existing && isPaymentPendingAccount(existing) && existingReferenceId && existingReferenceId !== incomingReferenceId) {
-      json(res, 409, {
-        error:
-          "A payment is already pending for that email. Finish the original payment flow, use forgot password, or contact Hoppers support so the paid account can be recovered safely.",
-      });
-      return true;
-    }
-    const clientReferenceId = incomingReferenceId || existingReferenceId || `hoppers_${crypto.randomUUID()}`;
-    const billing = buildAccountBilling(type, plan, {
-      ...(existing?.billing || {}),
-      provider: "stripe",
-      status: "payment_pending",
-      clientReferenceId,
-      pendingSignupAt: existing?.billing?.pendingSignupAt || now,
-      paymentPage: PAYMENT_PAGES_BY_PLAN[plan] || "./payment.html",
-      stripePaymentLinkId: STRIPE_PAYMENT_LINK_IDS[plan] || existing?.billing?.stripePaymentLinkId || null,
-    });
-    const accountData = {
-      type,
-      email,
-      ...hashPassword(password),
-      status: "payment_pending",
-      updatedAt: now,
-      profile,
-      billing,
-    };
-    const account = existing
-      ? await replaceAccount(existing.id, (current) => ({ ...current, ...accountData, createdAt: current.createdAt || now }))
-      : await saveAccount({ id: crypto.randomUUID(), createdAt: now, ...accountData });
-
-    json(res, existing ? 200 : 201, {
-      ok: true,
-      account: publicAccount(account),
-      accountId: account.id,
-      clientReferenceId,
-      paymentPage: PAYMENT_PAGES_BY_PLAN[plan] || "./payment.html",
+    json(res, 410, {
+      error: "Hoppers no longer creates pending accounts before payment. Complete Stripe checkout first, then Hoppers creates the account.",
     });
     return true;
   }
@@ -2429,6 +2381,14 @@ async function handleApi(req, res, pathname) {
     }
     if (!profile.name) {
       json(res, 400, { error: "Enter a profile name." });
+      return true;
+    }
+    if (type === "worker" && !profile.age) {
+      json(res, 400, { error: "Select your age." });
+      return true;
+    }
+    if (type === "worker" && !profile.gender) {
+      json(res, 400, { error: "Select your gender." });
       return true;
     }
     const existing = await findAccountByEmail(email);

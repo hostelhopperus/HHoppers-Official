@@ -47,7 +47,15 @@ async function finishPaidSignup() {
     params.get("stripe_success") === "true";
   const checkoutSessionId = params.get("session_id") || params.get("checkout_session_id") || params.get("session");
 
-  if (!paymentLooksSuccessful && !pending) {
+  if (!pending) {
+    setPaymentStatus(
+      "Signup details are missing.",
+      "Start from the Hoppers signup page again in this same browser tab. If your card was charged, contact Hoppers with the Stripe receipt email."
+    );
+    return;
+  }
+
+  if (!paymentLooksSuccessful && !checkoutSessionId) {
     setPaymentStatus(
       "Payment is not confirmed yet.",
       "Use the secure payment page from Hoppers signup first. If your card was charged, contact Hoppers with the Stripe receipt email."
@@ -60,15 +68,18 @@ async function finishPaidSignup() {
       checkoutSessionId ? "Confirming Stripe payment..." : "Finding your paid Stripe checkout...",
       "Do not pay again. Hoppers is matching your payment to the profile you started."
     );
-    const endpoint = checkoutSessionId ? "/api/account/complete-paid-signup" : "/api/account/recover-paid-signup";
-    await fetchJson(endpoint, {
+    await fetchJson("/api/account/register", {
       method: "POST",
       body: JSON.stringify({
-        stripeCheckoutSessionId: checkoutSessionId,
-        clientReferenceId: pending?.clientReferenceId || pending?.signupId || "",
-        email: pending?.email || "",
-        plan: pending?.plan || "",
-        type: pending?.type || "",
+        type: pending.type,
+        email: pending.email,
+        password: pending.password,
+        profile: pending.profile,
+        billing: {
+          plan: pending.plan,
+          stripeCheckoutSessionId: checkoutSessionId,
+          clientReferenceId: pending.clientReferenceId || pending.signupId || "",
+        },
       }),
     });
     sessionStorage.removeItem("hoppersPendingAccount");
