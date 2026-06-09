@@ -347,6 +347,9 @@ function statusLabel(value) {
 function formProfile(form) {
   const formData = new FormData(form);
   const type = String(formData.get("type") || currentAccount?.type || "worker");
+  const firstName = type === "worker" ? String(formData.get("firstName") || "").trim() : "";
+  const lastName = type === "worker" ? String(formData.get("lastName") || "").trim() : "";
+  const displayName = type === "worker" ? [firstName, lastName].filter(Boolean).join(" ") : String(formData.get("name") || "").trim();
   let photos = [];
   try {
     photos = JSON.parse(String(formData.get("photosData") || "[]"));
@@ -354,7 +357,9 @@ function formProfile(form) {
     photos = [];
   }
   const profile = {
-    name: String(formData.get("name") || "").trim(),
+    name: displayName,
+    firstName,
+    lastName,
     location: String(formData.get("location") || "").trim(),
     website: type === "hostel" ? String(formData.get("website") || "").trim() : "",
     nationality: type === "worker" ? String(formData.get("nationality") || "").trim() : "",
@@ -456,7 +461,19 @@ function checkedTags(form, tags = []) {
   });
 }
 
+function workerNameParts(profile = {}) {
+  const firstName = String(profile.firstName || "").trim();
+  const lastName = String(profile.lastName || "").trim();
+  if (firstName || lastName) return { firstName, lastName };
+  const parts = String(profile.name || "").trim().split(/\s+/).filter(Boolean);
+  return {
+    firstName: parts.shift() || "",
+    lastName: parts.join(" "),
+  };
+}
+
 function syncPlanOptions(type, select) {
+  const form = select.closest("form");
   select.querySelectorAll('option[value^="hostel-"]').forEach((option) => {
     option.disabled = type !== "hostel";
   });
@@ -465,26 +482,39 @@ function syncPlanOptions(type, select) {
   });
   if (type === "hostel" && !select.value.startsWith("hostel-")) select.value = "hostel-basic";
   if (type === "worker" && !select.value.startsWith("worker-")) select.value = "worker-basic";
-  select.closest("form")?.querySelectorAll(".worker-nationality-field").forEach((field) => {
+  form?.querySelectorAll(".worker-name-field").forEach((field) => {
+    field.hidden = type !== "worker";
+    const input = field.querySelector("input");
+    if (input) input.required = type === "worker";
+  });
+  form?.querySelectorAll(".hostel-name-field").forEach((field) => {
+    field.hidden = type !== "hostel";
+    const input = field.querySelector("input");
+    if (input) input.required = type === "hostel";
+  });
+  form?.querySelectorAll(".worker-nationality-field").forEach((field) => {
     field.hidden = type === "hostel";
   });
-  select.closest("form")?.querySelectorAll(".worker-age-field, .worker-gender-field").forEach((field) => {
+  form?.querySelectorAll(".worker-age-field, .worker-gender-field").forEach((field) => {
     field.hidden = type === "hostel";
   });
-  select.closest("form")?.querySelectorAll(".hostel-website-field").forEach((field) => {
+  form?.querySelectorAll(".hostel-website-field").forEach((field) => {
     field.hidden = type !== "hostel";
   });
-  select.closest("form")?.querySelectorAll(".hostel-photo-field").forEach((field) => {
+  form?.querySelectorAll(".hostel-photo-field").forEach((field) => {
     field.hidden = type !== "hostel";
   });
-  select.closest("form")?.querySelectorAll(".worker-depth-field").forEach((field) => {
+  form?.querySelectorAll(".worker-depth-field").forEach((field) => {
     field.hidden = type === "hostel";
   });
 }
 
 function fillProfileForm(account) {
   const profile = account.profile || {};
-  profileForm.elements.name.value = profile.name || "";
+  const nameParts = workerNameParts(profile);
+  profileForm.elements.firstName.value = account.type === "worker" ? nameParts.firstName : "";
+  profileForm.elements.lastName.value = account.type === "worker" ? nameParts.lastName : "";
+  profileForm.elements.name.value = account.type === "hostel" ? profile.name || "" : "";
   profileForm.elements.location.value = profile.location || "";
   profileForm.elements.website.value = account.type === "hostel" ? profile.website || "" : "";
   profileForm.elements.nationality.value = account.type === "worker" ? profile.nationality || "" : "";

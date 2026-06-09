@@ -80,9 +80,17 @@
 
           <form id="create-profile-form" class="account-form" hidden>
             <div class="field-grid">
-              <label>
-                <span id="create-name-label">Full name</span>
-                <input name="name" required placeholder="Your name" />
+              <label class="worker-name-field">
+                <span>First name</span>
+                <input name="firstName" required autocomplete="given-name" placeholder="First name" />
+              </label>
+              <label class="worker-name-field">
+                <span>Last name</span>
+                <input name="lastName" required autocomplete="family-name" placeholder="Last name" />
+              </label>
+              <label class="hostel-name-field">
+                <span id="create-name-label">Hostel name</span>
+                <input name="name" placeholder="Hostel name" />
               </label>
               <label>
                 <span>Email</span>
@@ -164,7 +172,7 @@
     </footer>
 
     <div id="toast" class="toast" role="status" aria-live="polite"></div>
-    <script src="./sign-in.js?v=9"></script>
+    <script src="./sign-in.js?v=10"></script>
     <script src="./site.js?v=1"></script>
     <script src="./app.js?v=1"></script>
   </body>

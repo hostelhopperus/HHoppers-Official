@@ -247,7 +247,15 @@ function syncPanel() {
   signinForm.hidden = selectedMode !== "signin";
   createProfileForm.hidden = selectedMode !== "create";
 
-  createNameLabel.textContent = selectedType === "hostel" ? "Hostel name" : "Full name";
+  createProfileForm.querySelectorAll(".worker-name-field").forEach((field) => {
+    field.hidden = selectedType !== "worker";
+    field.querySelector("input").required = selectedType === "worker";
+  });
+  createProfileForm.querySelectorAll(".hostel-name-field").forEach((field) => {
+    field.hidden = selectedType !== "hostel";
+    field.querySelector("input").required = selectedType === "hostel";
+  });
+  createNameLabel.textContent = "Hostel name";
   createTagsLegend.textContent = selectedType === "hostel" ? "Roles needed" : "Skills";
   createStartLabel.textContent = selectedType === "hostel" ? "Placement start date" : "Available start date";
   createEndLabel.textContent = selectedType === "hostel" ? "Placement end date" : "Available end date";
@@ -264,8 +272,13 @@ async function profileFromCreateForm() {
   const photoFile = createProfileForm.elements.photo?.files?.[0];
   if (photoFile && !photoFile.type.startsWith("image/")) throw new Error("Choose an image file for the profile photo.");
   if (photoFile && photoFile.size > 900 * 1024) throw new Error("Profile photo must be under 900 KB.");
+  const firstName = selectedType === "worker" ? String(formData.get("firstName") || "").trim() : "";
+  const lastName = selectedType === "worker" ? String(formData.get("lastName") || "").trim() : "";
+  const displayName = selectedType === "worker" ? [firstName, lastName].filter(Boolean).join(" ") : String(formData.get("name") || "").trim();
   return {
-    name: String(formData.get("name") || "").trim(),
+    name: displayName,
+    firstName,
+    lastName,
     location: "",
     website: selectedType === "hostel" ? String(formData.get("website") || "").trim() : "",
     nationality: selectedType === "worker" ? String(formData.get("nationality") || "").trim() : "",
